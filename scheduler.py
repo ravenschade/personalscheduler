@@ -230,12 +230,12 @@ while True:
         for i in todos[it]["depends-on"]:
             if todos[i]["due"] is None:
                 todos[i]["due"]=todos[it]["due"]
-                print("setting due of",i,"to due of",it)
+#                print("setting due of",i,"to due of",it)
                 found=True
                 break
             if todos[i]["due"]>todos[it]["due"]:
                 todos[i]["due"]=todos[it]["due"]
-                print("setting due of",i,"to due of",it)
+#                print("setting due of",i,"to due of",it)
                 found=True
                 break
         if found:
@@ -243,8 +243,8 @@ while True:
     if not found:
         break
 
-for it in range(len(todos)):
-    print(it,todos[it])
+#for it in range(len(todos)):
+#    print(it,todos[it])
 
 
 
@@ -350,8 +350,10 @@ for it in range(len(todos)):
             for s in todos[it]["slices"]:
                 slices[s]["used"]=True
                 slices[s]["task"]=it
-            print("schedule",todos[it]["summary"],"(",it,") in slices", " ".join(todos[it]["slices"]))
+#            print("schedule",todos[it]["summary"],"(",it,") in slices", " ".join(todos[it]["slices"]))
 
+#for it in range(len(todos)):
+#    print(it,todos[it])
 
 
 #schedule: earliest deadline first
@@ -373,8 +375,8 @@ for si in range(len(slices)):
 #                    print(it,"can't be scheduled because dependency",i,"is not yet scheduled")
                     break
             if viable:
-                    viable_jobs.append(it)
-
+                viable_jobs.append(it)
+#        print("viable=",viable_jobs)
 #        print("viable jobs=",viable_jobs)
         if len(viable_jobs)>0:
             #find job with closest deadline
@@ -386,6 +388,7 @@ for si in range(len(slices)):
                 if todos[it]["due"] is not None:
                     d=todos[it]["due"]
                     dj=it
+                    dp=int(todos[it]["priority"])
                     break
             #compare with other jobs with deadline
             for it in viable_jobs:
@@ -408,9 +411,9 @@ for si in range(len(slices)):
                     if int(todos[it]["priority"])>d:
                         dj=it
                         d=int(todos[it]["priority"])
-                #print("highest priority:",dj,todos[dj]["priority"])
+ #               print(si,"highest priority:",dj,todos[dj]["priority"],todos[dj]["summary"])
 #            else:
-#                print("closest deadline:",dj,todos[dj]["due"])
+                #print(si,"closest deadline:",dj,todos[dj]["due"],todos[dj]["summary"])
             #print("scheduling task",dj,todos[dj]["summary"],"in slot",si,slices[si])
             todos[dj]["scheduled_slices"]=todos[dj]["scheduled_slices"]+1
             if todos[dj]["scheduled_slices"]==todos[dj]["needed_slices"]:
@@ -419,22 +422,23 @@ for si in range(len(slices)):
             slices[si]["task"]=dj
             allocated_slices.append(dict(Task=todos[dj]["summary"],Start=slices[si]["start"],Finish=slices[si]["end"],Resource=" ".join(todos[dj]["categories"]),dummy=0))
         else:
-            print("no viable jobs in this slot")
+            print(si,slices[si],"no viable jobs in this slot")
             allocated_slices.append(dict(Task="idle",Start=slices[si]["start"],Finish=slices[si]["end"],Resource="idle",dummy=0))
 
-#check schedule: check if all deadlines could be accomodated
-for it in range(len(todos)):
-    if todos[it]["due"] is not None:
-        if todos[it]["due"]<=today+relativedelta.relativedelta(days=scheduledays+1):
-            if not  todos[it]["is_scheduled"]:
-                print("Plan BISHER:")
-                for si in range(20):
-                    print(slices[si]["start"],"-",slices[si]["end"],":",todos[slices[si]["task"]]["summary"])
-                raise RuntimeError("Error: Task "+str(it)+" "+todos[it]["summary"]+" couldn't be scheduled before deadline "+str(todos[it]["due"]))
+    #check schedule: check if all deadlines could be accomodated
+    for it in range(len(todos)):
+        if (todos[it]["due"] is not None) and todos[it]["to_be_scheduled"]:
+            if todos[it]["due"]<=slices[si]["end"]+relativedelta.relativedelta(days=1):
+                if not  todos[it]["is_scheduled"]:
+                    print("Plan BISHER:")
+                    for si2 in range(si):
+                        print(slices[si2]["start"],"-",slices[si2]["end"],":",todos[slices[si2]["task"]]["summary"])
+                    print("last slice:",slices[len(slices)-1])
+                    raise RuntimeError("Error: Task "+str(it)+" "+todos[it]["summary"]+" couldn't be scheduled before deadline "+str(todos[it]["due"]))
 
 
 print("Plan:")
-for si in range(30):
+for si in range(40):
     print(slices[si]["start"],"-",slices[si]["end"],":",todos[slices[si]["task"]]["summary"])
 
 start=today
