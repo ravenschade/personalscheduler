@@ -293,9 +293,9 @@ for s in all_slices:
 #        print("Overlap ",s,ovb)
 
 
-#print("number of slices=",len(slices))
-#for s in slices:
-#    print(s)
+print("number of slices=",len(slices))
+for s in slices:
+    print("available:",s['start'],"-",s["end"])
 
 
 #test feasibility of schedule by assigning slices to todos just before their due date
@@ -434,6 +434,7 @@ for si in range(len(slices)):
                     for si2 in range(si):
                         print(slices[si2]["start"],"-",slices[si2]["end"],":",todos[slices[si2]["task"]]["summary"])
                     print("last slice:",slices[len(slices)-1])
+                    print("last scheduled slice",si,slices[si])
                     raise RuntimeError("Error: Task "+str(it)+" "+todos[it]["summary"]+" couldn't be scheduled before deadline "+str(todos[it]["due"]))
 
 
