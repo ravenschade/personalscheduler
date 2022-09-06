@@ -183,42 +183,43 @@ def main():
 #    calendar = my_principal.calendar(name=cal)
     calendar2 = my_principal2.calendar(name=cal2)
 
-    todos=get_tasks(calendar2)
-    
-    questions = [{'type': 'list','name': 'user_option','message': 'Welcome to the time tracker','choices': ["start task","stop task","update task list"]}]
-    answers = prompt(questions, style=custom_style_2)
-    if answers.get("user_option") == "start task":
-        events,C,I=find_running(calendar2)
-        if len(C)>0:
-            print("some tasks are running, stopping them")
-            for i in I:
-                stop_task(events,i)
-        C=build_todo_list(todos)
-
-        questions = [{'type': 'list','name': 'user_option','message': 'Choose which task to start','choices': C}]
-        answers = prompt(questions, style=custom_style_2)
-        si=answers.get("user_option").split("[")
-        I=int(si[len(si)-1].split("]")[0])
+    while True:
+        todos=get_tasks(calendar2)
         
-        my_event = calendar2.save_event(
-            dtstart=datetime.now(),
-            dtend=datetime.now(),
-            summary=todos[I]["summary"],
-            location=tasks_url2+"/#/calendars/"+cal2+"/tasks/"+todos[I]["uid"]+".ics",
-            description="started\nNotes:"
-        )
-        print(my_event.url)
-    elif answers.get("user_option") == "stop task":
-        #find started but not stopped tasks
-        events,C,I=find_running(calendar2)
-        questions = [{'type': 'list','name': 'user_option','message': 'Welcome to the time tracker','choices': C}]
-        answers = prompt(questions, style=custom_style_2)
-        si=answers.get("user_option").split("[")
-        I=int(si[len(si)-1].split("]")[0])
-        stop_task(events,I)
-
-    elif answers.get("user_option") == "update task list":
         questions = [{'type': 'list','name': 'user_option','message': 'Welcome to the time tracker','choices': ["start task","stop task","update task list"]}]
         answers = prompt(questions, style=custom_style_2)
+        if answers.get("user_option") == "start task":
+            events,C,I=find_running(calendar2)
+            if len(C)>0:
+                print("some tasks are running, stopping them")
+                for i in I:
+                    stop_task(events,i)
+            C=build_todo_list(todos)
+
+            questions = [{'type': 'list','name': 'user_option','message': 'Choose which task to start','choices': C}]
+            answers = prompt(questions, style=custom_style_2)
+            si=answers.get("user_option").split("[")
+            I=int(si[len(si)-1].split("]")[0])
+            
+            my_event = calendar2.save_event(
+                dtstart=datetime.now(),
+                dtend=datetime.now(),
+                summary=todos[I]["summary"],
+                location=tasks_url2+"/#/calendars/"+cal2+"/tasks/"+todos[I]["uid"]+".ics",
+                description="started\nNotes:"
+            )
+            print(my_event.url)
+        elif answers.get("user_option") == "stop task":
+            #find started but not stopped tasks
+            events,C,I=find_running(calendar2)
+            if len(C)>0:
+                questions = [{'type': 'list','name': 'user_option','message': 'Welcome to the time tracker','choices': C}]
+                answers = prompt(questions, style=custom_style_2)
+                si=answers.get("user_option").split("[")
+                I=int(si[len(si)-1].split("]")[0])
+                stop_task(events,I)
+        elif answers.get("user_option") == "update task list":
+            questions = [{'type': 'list','name': 'user_option','message': 'Welcome to the time tracker','choices': ["start task","stop task","update task list"]}]
+            answers = prompt(questions, style=custom_style_2)
 if __name__ == "__main__":
     main()
