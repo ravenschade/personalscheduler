@@ -31,6 +31,8 @@ caldav_url2 = config["caldav_url2"]
 username2 = config["username2"]
 password2 = config["password2"]
 cal2=config["cal2"]
+tasks_url2 = config["tasks_url2"]
+tasksurl_prefix=tasks_url2+"/#/calendars/"+cal2+"/tasks/"
 
 timeslices=int(config["timeslice"])
 startofwork=int(config["startofwork"])
@@ -56,12 +58,13 @@ for i in range(scheduledays):
 #for s in scheduling_windows:
 #    print(s)
 
-def parse_ics(t):
+def parse_ics(t,url):
     ret=dict()
     T=t.splitlines()
     buf=""
     token=[{"name":"CATEGORIES","type":"commasep"},{"name":"DESCRIPTION","type":"string"},{"name":"PRIORITY","type":"int"},{"name":"SUMMARY","type":"string"},{"name":"DTSTART","type":"date"},{"name":"DTEND","type":"date"},{"name":"DUE","type":"date"},{"name":"STATUS","type":"string"},{"name":"PERCENT-COMPLETE","type":"int",},{"name":"TRANSP","type":"transparency"},{"name":"RELATED-TO","type":"string"},{"name":"UID","type":"string"}]
 
+    ret["url"]=url
     for t in token:
         sec=False
         for i in range(len(T)):
@@ -160,7 +163,7 @@ blocked=[]
 for d in range(scheduledays):
     events=calendar.date_search(start=today+relativedelta.relativedelta(days=d), end=today+relativedelta.relativedelta(days=d+1), expand=True)
     for t in events:
-        T=parse_ics(t.data)
+        T=parse_ics(t.data,str(t))
         #print("event")
         #print(t.data)
         #print(T)
@@ -175,13 +178,7 @@ for d in range(scheduledays):
 todos=[]
 stop=False
 for t in calendar2.todos():
-    T=parse_ics(t.data)
-    #print(t.data)
-    #for l in t.data.splitlines():
-    #    if l.startswith("RELATED-TO:"):
-    #        T["related-to"]=l.split(":")[1]
-    #    if l.startswith("UID:"):
-    #        T["uid"]=l.split(":")[1]
+    T=parse_ics(t.data,str(t))
 
     if T["due"] is not None:
         if T["duration"] is None:
@@ -293,9 +290,9 @@ for s in all_slices:
 #        print("Overlap ",s,ovb)
 
 
-print("number of slices=",len(slices))
-for s in slices:
-    print("available:",s['start'],"-",s["end"])
+#print("number of slices=",len(slices))
+#for s in slices:
+#    print("available:",s['start'],"-",s["end"])
 
 
 #test feasibility of schedule by assigning slices to todos just before their due date
@@ -317,9 +314,13 @@ for it in range(len(todos)):
         if possible:
             todos[it]["slices"].add(i)
     #compute number of needed slices for todo
-    todos[it]["needed_slices"]=math.ceil(todos[it]["duration"]/100.0*(100.0-todos[it]["percent-complete"])*60.0/timeslices)
-    if todos[it]["needed_slices"]==0:
-        todos[it]["needed_slices"]=1
+    if todos[it]["duration"]<0:
+        todos[it]["needed_slices"]=0
+        todos[it]["to_be_scheduled"]=False
+    else:
+        todos[it]["needed_slices"]=math.ceil(todos[it]["duration"]/100.0*(100.0-todos[it]["percent-complete"])*60.0/timeslices)
+        if todos[it]["needed_slices"]==0:
+            todos[it]["needed_slices"]=1
     todos[it]["etodos"]=[] #expanded todos, i.e. single sloted-todos
 
 #    print("summary=",todos[it]["summary"],"(",it,")")
@@ -439,8 +440,39 @@ for si in range(len(slices)):
 
 
 print("Plan:")
-for si in range(40):
-    print(slices[si]["start"],"-",slices[si]["end"],":",todos[slices[si]["task"]]["summary"])
+last=-1
+lasti=-1
+start=""
+end=""
+for si in range(50):
+    if last==-1:
+        start=slices[si]["start"]
+        last=slices[si]["task"]
+        lasti=si
+    if slices[si]["task"]!=last or slices[lasti]["end"].date() != slices[si]["end"].date():
+        t=todos[last]["related-to"]
+        f=True
+        s=""
+        while f:
+            f1=False
+            for i in range(len(todos)):
+                if todos[i]["uid"]==t:
+                    s=s+" -> "+str(todos[i]["summary"])
+                    f=True
+                    t=todos[i]["related-to"]
+                    f1=True
+                    break
+            if not f1:
+                break
+        u=todos[last]["url"].split("/")[-1]
+        print(start,"-",slices[lasti]["end"],":",todos[last]["summary"],s,tasksurl_prefix+u)
+        start=slices[si]["start"]
+        last=slices[si]["task"]
+        lasti=si
+    else:
+        lasti=si
+
+
 
 start=today
 end=today+relativedelta.relativedelta(days=14) #scheduledays)
