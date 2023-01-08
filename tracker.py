@@ -101,7 +101,7 @@ def main():
             util.taskactions(desc)
         elif answers.get("user_option") == "stop task":
             #find started but not stopped tasks
-            events,C,I=find_running(calendar2)
+            events,C,I=util.find_running(calendar2)
             if len(C)>0:
                 questions = [{'type': 'list','name': 'user_option','message': 'Welcome to the time tracker','choices': C}]
                 answers = prompt(questions, style=custom_style_2)

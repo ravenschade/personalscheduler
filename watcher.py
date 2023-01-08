@@ -81,8 +81,8 @@ def main():
             #stop task is not present for too long
             if not present and lastpresent+presence_stop_delay*60<time.time():
                 print("noone has been present for "+str(presence_stop_delay)+" minutes, stopping tasks (" +str(time.time())+" > "+str(lastpresent+presence_stop_delay*60)+")")
-                for i in range(len(I)):
-                    util.stop_task(events,I[i])
+                for i in I:
+                    util.stop_task(events,i)
             
             #stop task if appointment is currently running
             local_timezone = pytz.timezone('Europe/Berlin')
@@ -93,11 +93,12 @@ def main():
             for t in calevents:
                 T=util.parse_ics(t.data,str(t))
                 if T["dtstart"]<=now and T["dtend"]>=now:
+                    print("overlapping event=",T)
                     overlap=True
             if overlap:
                 print("there is an overlapping event, stopping tasks")
                 for i in I:
-                    util.stop_task(events,I[i])
+                    util.stop_task(events,i)
         else:
             #no task is running
             present=False
