@@ -39,7 +39,7 @@ startofwork=int(config["startofwork"])
 endofwork=int(config["endofwork"])
 scheduledays=int(config["scheduledays"])
 
-workdays=[0,1,2,3,4]
+workdays=[0,1,2,3,4,6]
 
 start=math.floor((now.hour*60 + now.minute)/timeslices)*timeslices
 
