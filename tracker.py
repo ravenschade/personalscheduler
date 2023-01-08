@@ -63,7 +63,7 @@ def main():
             if len(C)>0:
                 print("some tasks are running, stopping them")
                 for i in I:
-                    utilstop_task(events,i)
+                    util.stop_task(events,i)
             C=util.build_todo_list(todos)
 
             #search for string
@@ -107,7 +107,7 @@ def main():
                 answers = prompt(questions, style=custom_style_2)
                 si=answers.get("user_option").split("[")
                 I=int(si[len(si)-1].split("]")[0])
-                stop_task(events,I)
+                util.stop_task(events,I)
         elif answers.get("user_option") == "update task list":
             questions = [{'type': 'list','name': 'user_option','message': 'Welcome to the time tracker','choices': ["start task","stop task","update task list"]}]
             answers = prompt(questions, style=custom_style_2)
