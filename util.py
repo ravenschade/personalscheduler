@@ -103,7 +103,7 @@ def parse_ics(t,url=""):
 def get_tasks(calendar2):
     todos=[]
     for t in calendar2.todos():
-        T=parse_ics(t.data)
+        T=parse_ics(t.data,str(t).split()[1])
         todos.append(T)
 
     #invert relations from related-to to depends-on

@@ -76,27 +76,29 @@ def main():
             si=answers.get("user_option").split("[")
             I=int(si[len(si)-1].split("]")[0])
             
+            u=tasks_url2+"/#/calendars/"+cal2+"/tasks/"+todos[I]["url"].split("/")[-1]
             my_event = calendar2.save_event(
                 dtstart=datetime.now(),
                 dtend=datetime.now(),
                 summary=todos[I]["summary"],
-                location=tasks_url2+"/#/calendars/"+cal2+"/tasks/"+todos[I]["uid"]+".ics",
+                location=u, #tasks_url2+"/#/calendars/"+cal2+"/tasks/"+todos[I]["uid"]+".ics",
                 description="started\nNotes:"
             )
             print(my_event.url)
             #get descriptions of parent tasks
             desc=todos[I]["description"]
-            print(todos[I])
+            #print(todos[I])
             parents=[]
             J=I
             for i in range(10):
                 if len(todos[J]["related-to2"])!=0:
                     J=todos[J]["related-to2"][0]
                     parents.append(J)
-            print(parents)
-            desc=todos[I]["description"]
+            #print(parents)
+            desc="URL="+u+" "+todos[I]["description"]
             for p in parents:
                 desc=desc+" "+todos[p]["description"]
+            print(desc)
 
             util.taskactions(desc)
         elif answers.get("user_option") == "stop task":
