@@ -1,14 +1,22 @@
-import datetime
-import dateutil
-import json
-import caldav
+
+from datetime import datetime
+from datetime import timedelta
+from dateutil import relativedelta
+import plotly.express as px
+import pandas as pd
+import math
+import sys
 import pytz
 import time
+from plotly.subplots import make_subplots
+from dotenv import dotenv_values
 
-def serialize_datetime(obj):
-    if isinstance(obj, datetime.datetime):
-        return obj.isoformat()
-    raise TypeError("Type not serializable")
+from PyInquirer import prompt
+from examples import custom_style_2
+from prompt_toolkit.validation import Validator, ValidationError
+import caldav
+import webbrowser
+import subprocess
 
 def parse_ics(t,url=""):
     local_timezone = pytz.timezone('Europe/Berlin')
@@ -49,13 +57,13 @@ def parse_ics(t,url=""):
                         ret[t["name"].lower()]=False
                 elif t["type"]=="date":
                     if s.find("T")>=0 and s.find("Z")<0:
-                        ret[t["name"].lower()]=datetime.datetime.strptime(s,"%Y%m%dT%H%M%S").replace(tzinfo=pytz.utc).astimezone(local_timezone)
+                        ret[t["name"].lower()]=datetime.strptime(s,"%Y%m%dT%H%M%S").replace(tzinfo=pytz.utc).astimezone(local_timezone)
                     elif s.find("T")>=0 and s.find("Z")>0:
-                        ret[t["name"].lower()]=datetime.datetime.strptime(s,"%Y%m%dT%H%M%SZ").replace(tzinfo=pytz.utc).astimezone(local_timezone)
+                        ret[t["name"].lower()]=datetime.strptime(s,"%Y%m%dT%H%M%SZ").replace(tzinfo=pytz.utc).astimezone(local_timezone)
                     elif len(s)==8:
-                        ret[t["name"].lower()]=datetime.datetime.strptime(s,"%Y%m%d").replace(tzinfo=pytz.utc).astimezone(local_timezone)
+                        ret[t["name"].lower()]=datetime.strptime(s,"%Y%m%d").replace(tzinfo=pytz.utc).astimezone(local_timezone)
                         if t["name"].lower()=="due":
-                            ret["due"]=ret["due"]+dateutil.relativedelta.relativedelta(hours=23,minutes=59)
+                            ret["due"]=ret["due"]+relativedelta.relativedelta(hours=23,minutes=59)
                     else:
                         raise RuntimeError("unknown time format "+s)
                 found=True 
@@ -73,7 +81,7 @@ def parse_ics(t,url=""):
                     ret[t["name"].lower()]=None
     if ret["due"] is not None and ret["dtstart"] is not None:
         if ret["due"]==ret["dtstart"]:
-            ret["due"]=ret["dtstart"]+dateutil.relativedelta.relativedelta(days=1)
+            ret["due"]=ret["dtstart"]+relativedelta.relativedelta(days=1)
     if ret["priority"]==0:
         ret["priority"]=10
     ret["depends-on"]=[]
@@ -110,3 +118,82 @@ def get_tasks(calendar2):
                     if todos[it2]["uid"]==todos[it]["related-to"]:
                         todos[it]["related-to2"].append(it2)
     return todos
+
+def find_running(calendar2):
+    events=calendar2.date_search(start=datetime.today()-timedelta(days=7),end=datetime.today()+timedelta(days=1),expand=True)
+    i=0
+    C=[]
+    I=[]
+    for e in events:
+        E=parse_ics(e.data)
+        if E["description"].startswith("started"):
+            C.append(E["summary"]+": started at "+str(E["dtstart"])+" ["+str(i)+"]")
+            I.append(i)
+        i=i+1
+    return events,C,I
+    
+def get_presence(hosts):
+    s=[]
+    for h in hosts:
+        cmd="ssh "+h+" \"tail -n 1 ~/present\""
+        result = subprocess.run(cmd, stdout=subprocess.PIPE,shell=True)
+        o=result.stdout.decode()
+        if o.find("true")>=0:
+            s.append([True,int(o.split()[0])])
+        if o.find("false")>=0:
+            s.append([False,int(o.split()[0])])
+    return s
+
+def stop_task(events,I):
+    print("stopping: ",events[I].vobject_instance.vevent.summary.value)
+    events[I].vobject_instance.vevent.description.value = "\n".join(events[I].vobject_instance.vevent.description.value.split("\n")[1:])
+    events[I].vobject_instance.vevent.dtend.value = datetime.now()
+    print(events[I].save())
+
+def taskactions(desc):
+    token={"URL":"url","GIT":"url","CONFL":"url","NC":"url","OVERLEAF":"url"}
+    urls=[]
+    for f in sorted(desc.split()):
+        if len(f.split("="))==2:
+            if f.split("=")[0] in token:
+                if token[f.split("=")[0]]=="url":
+                    urls.append(f.split("=")[1])
+    print(urls)
+    for i in range(len(urls)):
+        if i==0:
+            webbrowser.get('chromium').open_new(urls[i])
+        else:
+            webbrowser.get('chromium').open_new_tab(urls[i])
+
+R=[]
+def get_related(i,todos,level):
+    global R
+    if len(todos[i]["depends-on"])==0:
+        return
+    for j in range(len(todos)):
+#        print(i,j,todos[j]["related-to2"])
+        if i in todos[j]["related-to2"]:
+            s=""
+            for l in range(level):
+                s=s+"    "
+            R.append(s+todos[j]["summary"]+" ["+str(j)+"]")
+            get_related(j,todos,level+1)
+
+def build_todo_list(todos):
+    global R
+    R=[]
+    for i in range(len(todos)):
+        if len(todos[i]["related-to2"])==0:
+            R.append(todos[i]["summary"]+" ["+str(i)+"]")
+            get_related(i,todos,1)
+    return R
+
+def filter_todo_list(L,filterstr):
+    F=[]
+    #only filter leafs
+    print(L)
+    for k in L:
+        if k.lower().find(filterstr.lower())>=0:
+            F.append(k)
+    return F
+

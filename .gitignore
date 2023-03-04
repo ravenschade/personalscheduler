@@ -1,2 +1,5 @@
 .env
 plan.html
+__pycache__
+*.swp
+data
