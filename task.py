@@ -31,7 +31,7 @@ class task:
         self.data["name"]=name
         
         if due is None:
-            due=inputs.input_date("Due date")
+            due=inputs.input_date("Due date",emptyallowed=True)
         self.data["due"]=due
 
         if eligible is None:
@@ -104,10 +104,18 @@ class task:
             actions.append("eligible "+str(self.data["eligible"]))
             actions.append("priority "+str(self.data["priority"]))
             actions.append("completed "+str(self.data["completed"]))
-            #FIXME show path  
-            actions.append("parent ")
+            
+            p=0
+            for s in col.tasks:
+                if self.ID in col.tasks[s].data["subtasks"]:
+                    p=s
+                    break
+            actions.append("parent "+col.tasks[p].data["name"])
             #FIXME show list
-            actions.append("add estimated work time ")
+            ttot=0
+            for ts in self.data["estworktime"]:
+                ttot=ttot+ts["duration"]
+            actions.append("add to estimated work time of "+str(ttot)+" hours")
             actions.append("back")
             
             result=inputs.select_from_set("Action",actions)
@@ -116,10 +124,10 @@ class task:
                 self.data["name"]=inputs.input_string("New task name")
             elif result==actions[1]:
                 due=inputs.input_date("Due date")
-                self.data["due"]=due    
+                self.data["due"]=due.isoformat()
             elif result==actions[2]:
                 eligible=inputs.input_date("Eligible from",emptyallowed=True,limit=datetime.datetime.fromisoformat(self.data["due"]))
-                self.data["eligible"]=eligible    
+                self.data["eligible"]=eligible.isoformat()
             elif result==actions[3]:
                 priority=inputs.input_int("Priority 0-10",vmin=0,vmax=10)
                 self.data["priority"]=priority
@@ -156,7 +164,7 @@ class task:
 
                 
             elif result==actions[6]:
-                estworktime=inputs.input_float("Estimated work time in hours")
+                estworktime=inputs.input_float("Add to estimated work time in hours")
                 t=timeslot.timeslot(duration=estworktime)
                 self.data["estworktime"].append(t.data)
 

@@ -270,7 +270,8 @@ class taskcollection:
         return slots2
 
 
-    def schedule(self,prioritycutoff=0,returnpartial=False,slotduration=15,futuredays=30):
+    def schedule(self,prioritycutoff=0,slotduration=15,futuredays=30):
+        problems=[]
         #extend due dates from parents to children without due dates
         #introduce indirect due date
         for ip in self.tasks:
@@ -358,11 +359,14 @@ class taskcollection:
             #exclude slots that are blocked by events
             slots=self.exclude_caldav_event(slots2)
 
+            nslots_available=0
             for i in range(len(slots)):
                 if not slots[i]["used"]: 
-                    print("available slot",i,slots[i]) 
+                    nslots_available=nslots_available+1
+            print("available slots=",nslots_available) 
 
             checkok=True
+            nslots_needed=0
             #set up possible slices for each task
             for it in self.tasks:
                 self.tasks[it].tmp["possible_slots"]=set()
@@ -399,12 +403,18 @@ class taskcollection:
                     ttot=0
                     for ts in self.tasks[it].data["estworktime"]:
                         ttot=ttot+ts["duration"]
-                    nslots=math.ceil(ttot/(slotduration/60.0))
+                    c=100.0
+                    if not(self.tasks[it].data["completed"] is None):
+                        c=float(self.tasks[it].data["completed"])
+                    nslots=math.ceil(ttot/(slotduration/60.0)*c/100.0)
                     if nslots==0:
                         self.tasks[it].tmp["to_be_scheduled"]=False
                         self.tasks[it].tmp["needed_slots"]=0
                     else:
                         self.tasks[it].tmp["needed_slots"]=nslots
+                nslots_needed=nslots_needed+self.tasks[it].tmp["needed_slots"]
+
+            print("needed slots=",nslots_needed) 
             
             #schedule tasks with exactly one slot choice first
             for it in self.tasks:
@@ -434,16 +444,17 @@ class taskcollection:
                         if sc==self.tasks[it].tmp["needed_slots"]:
                             break
                 if sc!=self.tasks[it].tmp["needed_slots"]:
-                    print("Couldn't schedule all overdue tasks first")
+                    problems.append("Couldn't schedule overdue task"+self.tasks[it].data["name"]+" first")
                     checkok=False
                 else:
                     self.tasks[it].tmp["to_be_scheduled"]=False
+                    problems.append("First scheduled overdue task"+self.tasks[it].data["name"]+" first")
             
             #check basic necessary conditions
             #check for solution for individual tasks
             for it in self.tasks:
                 if self.tasks[it].tmp["needed_slots"]> len(self.tasks[it].tmp["possible_slots"]) and self.tasks[it].tmp["to_be_scheduled"]:
-                    print("There are not enough slots to schedule task",it,self.tasks[it].data["name"],"even individually: needed slots",self.tasks[it].tmp["needed_slots"],"possible slots",len(self.tasks[it].tmp["possible_slots"]))
+                    problems.append("There are not enough slots to schedule task "+str(it)+" "+self.tasks[it].data["name"]+" even individually: needed slots "+str(self.tasks[it].tmp["needed_slots"])+", possible slots "+str(len(self.tasks[it].tmp["possible_slots"])))
                     checkok=False
 
             #schedule: earliest deadline first
@@ -465,7 +476,7 @@ class taskcollection:
                     closest=-1
                     mindist=None
                     for it in viable_tasks:
-                        m=(slots[si]["start"]-datetime.datetime.fromisoformat(self.tasks[it].tmp["due_implicit"])).total_seconds()
+                        m=-(slots[si]["start"]-datetime.datetime.fromisoformat(self.tasks[it].tmp["due_implicit"])).total_seconds()
                         if mindist is None:
                             mindist=m
                             closest=it
@@ -483,12 +494,33 @@ class taskcollection:
             #check schedule: check if all deadlines could be fulfilled
             for it in self.tasks:
                 if self.tasks[it].tmp["to_be_scheduled"]:
-                    print("Task couldn't be scheduled:",it,self.tasks[it].data["name"],self.tasks[it].tmp["due_implicit"])
+                    problems.append("Task couldn't be scheduled: "+str(it)+" "+self.tasks[it].data["name"]+" due "+str(self.tasks[it].tmp["due_implicit"]))
                     checkok=False
-            if checkok:
-                return slots
-            else:
-                if returnpartial:
-                    return slots
-                else:
-                    return None
+            #compress slots
+            slots_compressed=[]
+            prev=0
+            start=None
+            end=None
+            for i in range(len(slots)):
+                if slots[i]["used"]:
+                    if prev==0:
+                        prev=slots[i]["task"]
+                        start=slots[i]["start"]
+                        end=slots[i]["end"]
+                    elif slots[i]["task"]!=prev:
+                        slots_compressed.append(str(start)+" - "+str(end)+" "+self.tasks[prev].data["name"])
+                        prev=slots[i]["task"]
+                        start=slots[i]["start"]
+                        end=slots[i]["end"]
+                    else:
+                        if end==slots[i]["start"]: 
+                            end=slots[i]["end"]
+                        else:
+                            slots_compressed.append(str(start)+" - "+str(end)+" "+self.tasks[prev].data["name"])
+                            prev=slots[i]["task"]
+                            start=slots[i]["start"]
+                            end=slots[i]["end"]
+
+            slots_compressed.append(str(start)+" - "+str(end)+" "+self.tasks[prev].data["name"])
+            ret={"slots_compressed":slots_compressed,"slots":slots,"success":checkok,"nslots_needed":nslots_needed,"nslots_available":nslots_available,"problems":problems}
+            return ret

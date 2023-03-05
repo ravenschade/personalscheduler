@@ -4,6 +4,7 @@ import json
 import caldav
 import pytz
 import time
+import subprocess
 
 def serialize_datetime(obj):
     if isinstance(obj, datetime.datetime):
@@ -111,6 +112,14 @@ def get_tasks(calendar2):
                         todos[it]["related-to2"].append(it2)
     return todos
 
-def caldav_to_datetime(s):
-    #2023-03-04T00:59:00+01:00
-    return datetime.datetime.strptime(s, '%Y-%m-%dT%h:%m:%s%z')
+def get_presence(hosts):
+    s=[]
+    for h in hosts:
+        cmd="ssh "+h+" \"tail -n 1 ~/present\""
+        result = subprocess.run(cmd, stdout=subprocess.PIPE,shell=True)
+        o=result.stdout.decode()
+        if o.find("true")>=0:
+            s.append([True,int(o.split()[0])])
+        if o.find("false")>=0:
+            s.append([False,int(o.split()[0])])
+    return s
