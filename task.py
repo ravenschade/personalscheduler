@@ -4,6 +4,7 @@ import inputs
 import util
 import timeslot
 import taskcollection
+import datetime
 
 class task:
     jsonpath=""
@@ -95,5 +96,51 @@ class task:
     def __str__(self):
         return json.dumps(self.data, indent = 4, sort_keys=True, default=util.serialize_datetime)
 
+    def modify_interactive(self,col=None):
+        actions=["change name","change priority","change completed","change parent","add work time estimation"]
+        result=inputs.select_from_set("Action",actions)
+
+        if result=="change name":
+            self.data["name"]=inputs.input_string("New task name")
+        if result=="change priority":
+            priority=inputs.input_int("Priority 0-10",vmin=0,vmax=10)
+            self.data["priority"]=priority
+        if result=="change completed":
+            completed=inputs.input_int("completed 0-100",vmin=0,vmax=100)
+            self.data["completed"]=completed
+            if completed==100:
+                #recursively expand dependencies
+                changed=True
+                for ip in col.tasks:
+                    col.tasks[ip].tmp={}
+                    col.tasks[ip].tmp["subtasks_implicit"]=[]
+                while changed:
+                    changed=False
+                    for ip in col.tasks:
+                        for i in col.tasks[ip].tmp["subtasks_implicit"]:
+                            for j in col.tasks[i].tmp["subtasks_implicit"]:
+                                if j not in col.tasks[ip].tmp["subtasks_implicit"]:
+                                    col.tasks[ip].tmp["subtasks_implicit"].append(j)
+                                    changed=True
+                #mark all subtasks as completed
+                for i in self.tmp["subtasks_implicit"]:
+                    col.tasks[i].data["completed"]=completed
+
+        if result=="change parent":
+            search=inputs.input_string("Serach",emptyallowed=True)
+            t=col.select_task(search)
+            if not (self.ID in col.tasks[t].data["subtasks"]):
+                #remove from all 
+                for it in col.tasks:
+                    if self.ID in col.tasks[it].data["subtasks"]:
+                        col.tasks[it].data["subtasks"].remove(self.ID)
+                #add to new
+                col.tasks[t].data["subtasks"].append(self.ID)
+
+            
+        elif result=="add work time estimation":
+            estworktime=inputs.input_float("Estimated work time in hours")
+            t=timeslot.timeslot(duration=estworktime)
+            self.data["estworktime"].append(t.data)
 
 

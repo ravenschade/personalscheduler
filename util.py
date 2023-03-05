@@ -110,3 +110,7 @@ def get_tasks(calendar2):
                     if todos[it2]["uid"]==todos[it]["related-to"]:
                         todos[it]["related-to2"].append(it2)
     return todos
+
+def caldav_to_datetime(s):
+    #2023-03-04T00:59:00+01:00
+    return datetime.datetime.strptime(s, '%Y-%m-%dT%h:%m:%s%z')

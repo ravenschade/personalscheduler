@@ -62,14 +62,17 @@ elif result=="start work on task":
     col.write()
 elif result=="modify task":
     print("Select Task")
-    search=inputs.input_string("Serach",emptyallowed=Tru)
+    search=inputs.input_string("Serach",emptyallowed=True)
     t=col.select_task(search)
-
-    actions=[""]
-    result=inputs.select_from_set("Action",actions)
+    col.tasks[t].modify_interactive(col=col)
+    col.write()
 
 elif result=="schedule":
-    print("Trying to schedule, please wait")
+    schedule=col.schedule(prioritycutoff=0,returnpartial=True)
+    for s in schedule:
+        if not(s["task"] is None):
+            print(s,col.tasks[s["task"]].data["name"])
+
 elif result=="import":
     print("Trying to import from webdav, please wait")
     col.import_caldav()
