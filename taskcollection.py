@@ -156,6 +156,16 @@ class taskcollection:
                     ts["end"]=datetime.datetime.now()
                     ts["endtype"]="start_of_other_task"
         self.write()
+    
+    def check_running(self):
+        #check if a task is running
+        for t in self.tasks:
+            if self.tasks[t].data["completed"]==100:
+                continue
+            for ts in self.tasks[t].data["timeslots"]:
+                if ts["end"] is None:
+                    return self.tasks[t].data["name"]
+        return None
 
     def import_caldav(self):
         self.tasks={}
@@ -363,6 +373,8 @@ class taskcollection:
                     if self.tasks[it].data["priority"]<prioritycutoff:
                         self.tasks[it].tmp["to_be_scheduled"]=False
                         continue
+                if self.tasks[it].data["completed"]==100:
+                    self.tasks[it].tmp["to_be_scheduled"]=False
 
                 if ( self.tasks[it].tmp["due_implicit"] is None):
                     self.tasks[it].tmp["to_be_scheduled"]=False

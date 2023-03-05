@@ -97,50 +97,70 @@ class task:
         return json.dumps(self.data, indent = 4, sort_keys=True, default=util.serialize_datetime)
 
     def modify_interactive(self,col=None):
-        actions=["change name","change priority","change completed","change parent","add work time estimation"]
-        result=inputs.select_from_set("Action",actions)
-
-        if result=="change name":
-            self.data["name"]=inputs.input_string("New task name")
-        if result=="change priority":
-            priority=inputs.input_int("Priority 0-10",vmin=0,vmax=10)
-            self.data["priority"]=priority
-        if result=="change completed":
-            completed=inputs.input_int("completed 0-100",vmin=0,vmax=100)
-            self.data["completed"]=completed
-            if completed==100:
-                #recursively expand dependencies
-                changed=True
-                for ip in col.tasks:
-                    col.tasks[ip].tmp={}
-                    col.tasks[ip].tmp["subtasks_implicit"]=[]
-                while changed:
-                    changed=False
-                    for ip in col.tasks:
-                        for i in col.tasks[ip].tmp["subtasks_implicit"]:
-                            for j in col.tasks[i].tmp["subtasks_implicit"]:
-                                if j not in col.tasks[ip].tmp["subtasks_implicit"]:
-                                    col.tasks[ip].tmp["subtasks_implicit"].append(j)
-                                    changed=True
-                #mark all subtasks as completed
-                for i in self.tmp["subtasks_implicit"]:
-                    col.tasks[i].data["completed"]=completed
-
-        if result=="change parent":
-            search=inputs.input_string("Serach",emptyallowed=True)
-            t=col.select_task(search)
-            if not (self.ID in col.tasks[t].data["subtasks"]):
-                #remove from all 
-                for it in col.tasks:
-                    if self.ID in col.tasks[it].data["subtasks"]:
-                        col.tasks[it].data["subtasks"].remove(self.ID)
-                #add to new
-                col.tasks[t].data["subtasks"].append(self.ID)
-
+        while True:
+            actions=[]
+            actions.append("name "+self.data["name"])
+            actions.append("due "+str(self.data["due"]))
+            actions.append("eligible "+str(self.data["eligible"]))
+            actions.append("priority "+str(self.data["priority"]))
+            actions.append("completed "+str(self.data["completed"]))
+            #FIXME show path  
+            actions.append("parent ")
+            #FIXME show list
+            actions.append("add estimated work time ")
+            actions.append("back")
             
-        elif result=="add work time estimation":
-            estworktime=inputs.input_float("Estimated work time in hours")
-            t=timeslot.timeslot(duration=estworktime)
-            self.data["estworktime"].append(t.data)
+            result=inputs.select_from_set("Action",actions)
+            
+            if result==actions[0]:
+                self.data["name"]=inputs.input_string("New task name")
+            elif result==actions[1]:
+                due=inputs.input_date("Due date")
+                self.data["due"]=due    
+            elif result==actions[2]:
+                eligible=inputs.input_date("Eligible from",emptyallowed=True,limit=datetime.datetime.fromisoformat(self.data["due"]))
+                self.data["eligible"]=eligible    
+            elif result==actions[3]:
+                priority=inputs.input_int("Priority 0-10",vmin=0,vmax=10)
+                self.data["priority"]=priority
+            elif result==actions[4]:
+                completed=inputs.input_int("completed 0-100",vmin=0,vmax=100)
+                self.data["completed"]=completed
+                if completed==100:
+                    #recursively expand dependencies
+                    changed=True
+                    for ip in col.tasks:
+                        col.tasks[ip].tmp={}
+                        col.tasks[ip].tmp["subtasks_implicit"]=[]
+                    while changed:
+                        changed=False
+                        for ip in col.tasks:
+                            for i in col.tasks[ip].tmp["subtasks_implicit"]:
+                                for j in col.tasks[i].tmp["subtasks_implicit"]:
+                                    if j not in col.tasks[ip].tmp["subtasks_implicit"]:
+                                        col.tasks[ip].tmp["subtasks_implicit"].append(j)
+                                        changed=True
+                    #mark all subtasks as completed
+                    for i in self.tmp["subtasks_implicit"]:
+                        col.tasks[i].data["completed"]=completed
+            elif result==actions[5]:
+                search=inputs.input_string("Serach",emptyallowed=True)
+                t=col.select_task(search)
+                if not (self.ID in col.tasks[t].data["subtasks"]):
+                    #remove from all 
+                    for it in col.tasks:
+                        if self.ID in col.tasks[it].data["subtasks"]:
+                            col.tasks[it].data["subtasks"].remove(self.ID)
+                    #add to new
+                    col.tasks[t].data["subtasks"].append(self.ID)
+
+                
+            elif result==actions[6]:
+                estworktime=inputs.input_float("Estimated work time in hours")
+                t=timeslot.timeslot(duration=estworktime)
+                self.data["estworktime"].append(t.data)
+
+            elif result==actions[len(actions)-1]:
+                break
 
 
