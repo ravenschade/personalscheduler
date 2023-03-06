@@ -115,7 +115,16 @@ class task:
             ttot=0
             for ts in self.data["estworktime"]:
                 ttot=ttot+ts["duration"]
-            actions.append("add to estimated work time of "+str(ttot)+" hours")
+            tused=0
+            for ts in self.data["timeslots"]:
+                tend=ts["end"]
+                if tend is None:
+                    tend=datetime.datetime.now()
+                else:
+                    tend=datetime.datetime.fromisoformat(ts["end"])
+                tused=tused+(tend-datetime.datetime.fromisoformat(ts["start"])).total_seconds()/3600.0
+            left=ttot-tused
+            actions.append("add to estimated work time of "+str(ttot)+" hours, left are "+str(left)+" hours")
             actions.append("back")
             
             result=inputs.select_from_set("Action",actions)

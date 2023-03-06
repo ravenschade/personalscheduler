@@ -129,6 +129,10 @@ class taskcollection:
     def tasks_to_list(self,element=0,level=0,path=[0],fields=None,fields_tmp=None,completed=False):
         if len(self.tasks[element].data["subtasks"])==0:
             self.buf_paths.append(path)
+        if level==0:
+            self.buf.append(self.tasks[0].data["name"])
+            self.buf2.append(0)
+
         for t in self.tasks[element].data["subtasks"]:
             if self.tasks[t].data["completed"]==100 and not completed:
                 continue
