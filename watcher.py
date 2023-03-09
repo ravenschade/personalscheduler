@@ -59,12 +59,24 @@ def main():
     while True:
         P=util.get_presence(present_hosts)
         print(P)
-        col=taskcollection.taskcollection("data")
         calendar = my_principal.calendar(name=cal)
-        t=col.check_running()
+            
+        #stop task if appointment is currently running
+        local_timezone = pytz.timezone('Europe/Berlin')
+        now = datetime.datetime.now(local_timezone)
+        today=local_timezone.localize(datetime.datetime(now.year, now.month, now.day)) #.replace(tzinfo=local_timezone).astimezone(local_timezone)
+        calevents=calendar.date_search(start=today, end=today+dateutil.relativedelta.relativedelta(days=1), expand=True)
+        overlap=False
+        for t in calevents:
+            T=util.parse_ics(t.data,str(t))
+            if T["dtstart"]<=now and T["dtend"]>=now:
+                print("overlapping event=",T)
+                overlap=True
 
+        col=taskcollection.taskcollection("data")
+        t=col.check_running()
         if not (t is None):
-            print(" a task is running, checking if person is present on one of the present_hosts")
+            print(" a task (",t,") is running, checking if person is present on one of the present_hosts")
             present=False
             lastpresent=0
             for p in P:
@@ -76,21 +88,10 @@ def main():
             if not present and lastpresent+presence_stop_delay*60<time.time():
                 print("noone has been present for "+str(presence_stop_delay)+" minutes, stopping tasks (" +str(time.time())+" > "+str(lastpresent+presence_stop_delay*60)+")")
                 col.stop_all_tasks()
-            
-            #stop task if appointment is currently running
-            local_timezone = pytz.timezone('Europe/Berlin')
-            now = datetime.datetime.now(local_timezone)
-            today=local_timezone.localize(datetime.datetime(now.year, now.month, now.day)) #.replace(tzinfo=local_timezone).astimezone(local_timezone)
-            calevents=calendar.date_search(start=today, end=today+dateutil.relativedelta.relativedelta(days=1), expand=True)
-            overlap=False
-            for t in calevents:
-                T=util.parse_ics(t.data,str(t))
-                if T["dtstart"]<=now and T["dtend"]>=now:
-                    print("overlapping event=",T)
-                    overlap=True
             if overlap:
                 print("there is an overlapping event, stopping tasks")
                 col.stop_all_tasks()
+            
         else:
             #no task is running
             present=False
@@ -100,33 +101,22 @@ def main():
                     present=True
                     lastpresent=max(p[1],lastpresent)
                     break
-            if present and lastpresent+presence_start_delay*60<=time.time():
+            if present and lastpresent+presence_start_delay*60<=time.time() and not overlap:
                 print("someone has been present for at least "+str(presence_start_delay)+" minutes but no task is running, sending notification")
                 gotify = Gotify(base_url=gotify_url,app_token=gotify_token)
                 gotify.create_message("NO TASK IS RUNNING!",title="personalscheduler",priority=10)
 
-        #check for mails with important-tag
-        #with IMAP4_SSL(imap_host,port=imap_port) as M:
-        #    M.login(imap_user,imap_password)
-        #    M.select(mailbox='INBOX', readonly=True)
-#
-#            typ, data = M.search(None, 'FLAGGED')
- #           for num in data[0].split():
- #               typ, data = M.fetch(num, '(BODY)')
- #               print('Message',typ,data)
- #           M.close()
-  #          M.logout()
         with MailBox(imap_host,port=imap_port).login(imap_user,imap_password, initial_folder='INBOX') as mailbox:
             #flags = (imap_tools.MailMessageFlags.SEEN, imap_tools.MailMessageFlags.FLAGGED
             for msg in mailbox.fetch(A(flagged=True),mark_seen=False):
+                col=taskcollection.taskcollection("data")
                 print(msg.date, msg.subject, msg.from_,msg.flags,msg.uid)
                 mailbox.flag(mailbox.uids(A(uid=msg.uid)),imap_tools.MailMessageFlags.FLAGGED,False) #tuple(l),True)
                 mailbox.flag(mailbox.uids(A(uid=msg.uid)),imap_tools.MailMessageFlags.SEEN,True) #tuple(l),True)
                 #add task in Mails
-                col=taskcollection.taskcollection("data")
                 t=task.task()
                 tomorrow=datetime.datetime.combine(datetime.datetime.now(), datetime.time.min)+datetime.timedelta(days=1)
-                t.input(tasks=col,name=msg.from_+" "+msg.subject,due=tomorrow,eligible=datetime.datetime.now(),estworktime=1,tags=["Mail"],priority=8,tasktype="todo",completed=0)
+                t.input(tasks=col,name=msg.from_+" "+msg.subject,due=tomorrow,eligible=datetime.datetime.now(),estworktime=0.5,tags=["Mail"],priority=8,tasktype="todo",completed=0)
                 p=0
                 for it in col.tasks:
                     if col.tasks[it].data["name"]=="Mails":
@@ -143,7 +133,7 @@ def main():
                 col=taskcollection.taskcollection("data")
                 t=task.task()
                 tomorrow=datetime.datetime.combine(datetime.datetime.now(), datetime.time.min)+datetime.timedelta(days=1)
-                t.input(tasks=col,name=g["text"],due=tomorrow,eligible=datetime.datetime.now(),estworktime=1,tags=["Mail"],priority=8,tasktype="todo",completed=0)
+                t.input(tasks=col,name=g["text"],due=tomorrow,eligible=datetime.datetime.now(),estworktime=0.5,tags=["Mail"],priority=8,tasktype="todo",completed=0)
                 p=0
                 for it in col.tasks:
                     if col.tasks[it].data["name"]=="From Smartphone":
@@ -152,16 +142,16 @@ def main():
                 col.add_task(t,parent=p)
                 col.write()              
             elif g["msg_type"]=="file":
+                col=taskcollection.taskcollection("data")
                 path=g["path"]
                 fn=g["path"].split("/")[-1]
-                col=taskcollection.taskcollection("data")
                 #copy file to nc
                 nc_share=config["nc_share"]
                 nc_url=config["nc_url"]
                 while True:
                     response = requests.put(nc_url+"/"+fn,  auth = HTTPBasicAuth(nc_share, ''), data=open(path,'rb').read())
                     print(response)
-                    if response.status_code==201:
+                    if response.status_code==201 or response.status_code==204:
                         break
                     else:
                         time.sleep(1)
@@ -173,7 +163,7 @@ def main():
                 tomorrow=datetime.datetime.combine(datetime.datetime.now(), datetime.time.min)+datetime.timedelta(days=1)
                 t=task.task()
                 tn=text+" "+config["nc_downurl"]+fn
-                t.input(tasks=col,name=tn,due=tomorrow,eligible=datetime.datetime.now(),estworktime=1,tags=[],priority=8,tasktype="todo",completed=0)
+                t.input(tasks=col,name=tn,due=tomorrow,eligible=datetime.datetime.now(),estworktime=0.5,tags=[],priority=8,tasktype="todo",completed=0)
                 p=0
                 for it in col.tasks:
                     if col.tasks[it].data["name"]=="From Smartphone":

@@ -127,15 +127,21 @@ class taskcollection:
         return result
 
     def tasks_to_list(self,element=0,level=0,path=[0],fields=None,fields_tmp=None,completed=False):
-        if len(self.tasks[element].data["subtasks"])==0:
-            self.buf_paths.append(path)
+        all_sub_tasks_completed=True
+        for s in self.tasks[element].data["subtasks"]:
+            if self.tasks[s].data["completed"]!=100:
+                all_sub_tasks_completed=False
+        if len(self.tasks[element].data["subtasks"])==0 or all_sub_tasks_completed:
+            path2=copy.deepcopy(path)
+            self.buf_paths.append(path2)
         if level==0:
             self.buf.append(self.tasks[0].data["name"])
             self.buf2.append(0)
 
         for t in self.tasks[element].data["subtasks"]:
-            if self.tasks[t].data["completed"]==100 and not completed:
-                continue
+            if not(completed is None):
+                if self.tasks[t].data["completed"]==100 and not completed:
+                    continue
             s=""
             for i in range(level):
                 s=s+"    "
@@ -332,7 +338,10 @@ class taskcollection:
             for ip in self.tasks:
                 if not (self.tasks[ip].tmp["due_implicit"] is None):
                     if datetime.datetime.fromisoformat(self.tasks[ip].tmp["due_implicit"]).date()<=datetime.datetime.now().date():
-                        overdue.append(ip)
+                        if self.tasks[ip].data["completed"] is None:
+                            overdue.append(ip)
+                        elif self.tasks[ip].data["completed"]!=100:
+                            overdue.append(ip)
 
             #settings
             
@@ -351,7 +360,7 @@ class taskcollection:
             #not on weekends
             for i in range(len(slots)):
                 excl=False
-                if slots[i]["start"].weekday()>=5:
+                if slots[i]["start"].weekday()>=6:
                     excl=True
                 if slots[i]["start"].hour<8:
                     excl=True
@@ -361,6 +370,7 @@ class taskcollection:
                     slots2.append(slots[i])
     
             #exclude slots that are blocked by events
+            print("retrieving events/appointments from caldav")
             slots=self.exclude_caldav_event(slots2)
 
             nslots_available=0
@@ -407,10 +417,10 @@ class taskcollection:
                     ttot=0
                     for ts in self.tasks[it].data["estworktime"]:
                         ttot=ttot+ts["duration"]
-                    c=100.0
+                    c=0.0
                     if not(self.tasks[it].data["completed"] is None):
                         c=float(self.tasks[it].data["completed"])
-                    nslots=math.ceil(ttot/(slotduration/60.0)*c/100.0)
+                    nslots=math.ceil(ttot/(slotduration/60.0)*(100.0-c)/100.0)
                     if nslots==0:
                         self.tasks[it].tmp["to_be_scheduled"]=False
                         self.tasks[it].tmp["needed_slots"]=0
@@ -437,7 +447,7 @@ class taskcollection:
             for it in overdue:
                 if not self.tasks[it].tmp["to_be_scheduled"]:
                     continue
-                print("First scheduling overdue task",it,self.tasks[it].data["name"])
+                print("First scheduling overdue task",it,self.tasks[it].data["name"],self.tasks[it].data["due"],self.tasks[it].tmp["due_implicit"])
                 sc=0
                 for i in range(len(slots)):
                     if not slots[i]["used"]:
@@ -463,36 +473,40 @@ class taskcollection:
 
             #schedule: earliest deadline first
             for si in range(len(slots)):
-                if slots[si]["used"]:
-                    continue
-                viable_tasks=[]
-                for it in self.tasks:
-                    viable=self.tasks[it].tmp["to_be_scheduled"]
-                    if not (si in self.tasks[it].tmp["possible_slots"]):
-                        viable=False
-                    for i in self.tasks[it].tmp["subtasks_implicit"]:
-                        if self.tasks[i].tmp["to_be_scheduled"]:
+                #try with decreasing importance
+                for minprio in [8,5,2,0]:
+                    if slots[si]["used"]:
+                        continue
+                    viable_tasks=[]
+                    for it in self.tasks:
+                        viable=self.tasks[it].tmp["to_be_scheduled"]
+                        if not (si in self.tasks[it].tmp["possible_slots"]):
                             viable=False
-                    if viable:
-                        viable_tasks.append(it)
-                if len(viable_tasks)>0:
-                    #find job with closest deadline
-                    closest=-1
-                    mindist=None
-                    for it in viable_tasks:
-                        m=-(slots[si]["start"]-datetime.datetime.fromisoformat(self.tasks[it].tmp["due_implicit"])).total_seconds()
-                        if mindist is None:
-                            mindist=m
-                            closest=it
-                        else:
-                            if m<mindist:
-                                closest=it
+                        for i in self.tasks[it].tmp["subtasks_implicit"]:
+                            if self.tasks[i].tmp["to_be_scheduled"]:
+                                viable=False
+                        if viable and self.tasks[it].data["priority"]>=minprio:
+                            viable_tasks.append(it)
+
+                    if len(viable_tasks)>0:
+                        #find job with closest deadline
+                        closest=-1
+                        mindist=None
+                        for it in viable_tasks:
+                            m=-(slots[si]["start"]-datetime.datetime.fromisoformat(self.tasks[it].tmp["due_implicit"])).total_seconds()
+                            if mindist is None:
                                 mindist=m
-                    slots[si]["used"]=True
-                    slots[si]["task"]=closest
-                    self.tasks[closest].tmp["slots"].append(si)
-                    if self.tasks[closest].tmp["needed_slots"]==len(self.tasks[closest].tmp["slots"]):
-                        self.tasks[closest].tmp["to_be_scheduled"]=False
+                                closest=it
+                            else:
+                                if m<mindist:
+                                    closest=it
+                                    mindist=m
+                        slots[si]["used"]=True
+                        slots[si]["task"]=closest
+                        self.tasks[closest].tmp["slots"].append(si)
+                        if self.tasks[closest].tmp["needed_slots"]==len(self.tasks[closest].tmp["slots"]):
+                            self.tasks[closest].tmp["to_be_scheduled"]=False
+
                     
 
             #check schedule: check if all deadlines could be fulfilled
@@ -512,7 +526,7 @@ class taskcollection:
                         start=slots[i]["start"]
                         end=slots[i]["end"]
                     elif slots[i]["task"]!=prev:
-                        slots_compressed.append(str(start)+" - "+str(end)+" "+self.tasks[prev].data["name"])
+                        slots_compressed.append(str(start)+" - "+str(end)+" "+self.tasks[prev].data["name"]+" (due "+str(self.tasks[prev].data["due"])+ ", eff. due "+str(self.tasks[prev].tmp["due_implicit"])+")")
                         prev=slots[i]["task"]
                         start=slots[i]["start"]
                         end=slots[i]["end"]
@@ -520,11 +534,11 @@ class taskcollection:
                         if end==slots[i]["start"]: 
                             end=slots[i]["end"]
                         else:
-                            slots_compressed.append(str(start)+" - "+str(end)+" "+self.tasks[prev].data["name"])
+                            slots_compressed.append(str(start)+" - "+str(end)+" "+self.tasks[prev].data["name"]+" (due "+str(self.tasks[prev].data["due"])+ ", eff. due "+str(self.tasks[prev].tmp["due_implicit"])+")")
                             prev=slots[i]["task"]
                             start=slots[i]["start"]
                             end=slots[i]["end"]
 
-            slots_compressed.append(str(start)+" - "+str(end)+" "+self.tasks[prev].data["name"])
+            slots_compressed.append(str(start)+" - "+str(end)+" "+self.tasks[prev].data["name"]+" (due "+str(self.tasks[prev].data["due"])+ ", eff. due "+str(self.tasks[prev].tmp["due_implicit"])+")")
             ret={"slots_compressed":slots_compressed,"slots":slots,"success":checkok,"nslots_needed":nslots_needed,"nslots_available":nslots_available,"problems":problems}
             return ret

@@ -37,10 +37,16 @@ elif args.checkrunning:
 else:
     while True:
         col=taskcollection.taskcollection(args.path)
+        r=col.check_running()
+        if r is None:
+           print("No Task is running")
+        else:
+           print("Task",r,"running")
         actions=["start work on task","modify task","schedule","create task","stop work on task","import","exit"]
         result=inputs.select_from_set("Action",actions)
 
         if result=="create task":
+            col=taskcollection.taskcollection(args.path)
             print("Select Parent Task")
             search=inputs.input_string("Serach",emptyallowed=True)
             parent=col.select_task(search)
@@ -51,6 +57,7 @@ else:
             col.write()
 
         elif result=="start work on task":
+            col=taskcollection.taskcollection(args.path)
             print("Select Task")
             search=inputs.input_string("Serach",emptyallowed=True)
             t=col.select_task(search)
@@ -62,6 +69,7 @@ else:
             col.tasks[t].data["timeslots"].append(ts.data)
             col.write()
         elif result=="modify task":
+            col=taskcollection.taskcollection(args.path)
             print("Select Task")
             search=inputs.input_string("Serach",emptyallowed=True)
             t=col.select_task(search)
@@ -70,6 +78,7 @@ else:
             col.write()
 
         elif result=="schedule":
+            col=taskcollection.taskcollection(args.path)
             ret=col.schedule(prioritycutoff=0)
             if ret["success"]:
                 print("scheduling succesful!")
@@ -82,6 +91,7 @@ else:
                 elif result=="partial schedule":
                     result=inputs.select_from_set("Partial Schedule",ret["slots_compressed"])
         elif result=="import":
+            col=taskcollection.taskcollection(args.path)
             print("Trying to import from webdav, please wait")
             col.import_caldav()
             
