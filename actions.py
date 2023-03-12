@@ -49,9 +49,12 @@ else:
         tl=datetime.datetime(now.year, now.month,now.day,0,0)+relativedelta.relativedelta(days=-days)
         col.used_time(start=tl,end=now)
         l=col.get_items_at_level(level=1)
-        s="Worktime stats ("+str(days)+" days):"
+        s="Worktime stats (last "+str(days)+" days):"
         for i in l:
-            s=s+" "+col.tasks[i].data["name"]+" "+str(col.tasks[i].tmp["used_time"])+","
+            s=s+" "+col.tasks[i].data["name"]+" "+"{:.2f}".format(col.tasks[i].tmp["used_time"])+","
+        print(s)
+        event_time=col.event_time(start=tl,end=now)
+        s="Event stats (last "+str(days)+" days): "+"{:.2f}".format(event_time)
         print(s)
 
         actions=["start work on task","modify task","schedule","create task","stop work on task","import","used time","exit"]

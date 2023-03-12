@@ -11,6 +11,7 @@ import caldav
 import math
 import pytz
 from dateutil import relativedelta
+import pickle
 
 class taskcollection:
     path=""
@@ -18,6 +19,7 @@ class taskcollection:
     tree={}
     def __init__(self,path):
         self.path=path
+        self.events={}
         self.read()
 
     def read(self):
@@ -27,6 +29,7 @@ class taskcollection:
                 t=task.task()
                 t.read_from_file(self.path+"/tasks/"+p)
                 self.tasks[t.ID]=t
+            self.load_calendar_events()
         else:
             print("task collection is not existing at ",self.path,"creating new")
             os.mkdir(self.path)
@@ -237,27 +240,52 @@ class taskcollection:
             self.tasks[ID]=copy.deepcopy(t)
             self.tasks[ID].jsonpath="data/tasks/"+str(ID)+".json"
         self.write()
-    
+   
+    def load_calendar_events(self,days=60,forceupdate=False):
+        told=False
+        if os.path.isfile(self.path+"/events_cache.p"):
+            self.events=pickle.load(open(self.path+"/events_cache.p", "rb"))
+            if datetime.datetime.now()-self.events["state"]>=datetime.timedelta(hours=2):
+                told=True
+        else:
+            told=True
+
+        if told or forceupdate:
+            print("loading events from caldav...")
+            config = dotenv_values(".env")
+            caldav_url = config["caldav_url"]
+            username = config["username"]
+            password = config["password"]
+            cal=config["cal"]
+            client = caldav.DAVClient(url=caldav_url, username=username, password=password)
+            my_principal = client.principal()
+            calendars = my_principal.calendars()
+            calendar = my_principal.calendar(name=cal)
+            local_timezone = pytz.timezone('Europe/Berlin')
+            now = datetime.datetime.now(local_timezone)
+            today=local_timezone.localize(datetime.datetime(now.year, now.month, now.day)) #.replace(tzinfo=local_timezone).astimezone(local_timezone)
+            self.events={"state":datetime.datetime.now(),"data":{}}
+            for d in range(days):
+                e=calendar.date_search(start=today+relativedelta.relativedelta(days=d), end=today+relativedelta.relativedelta(days=d+1), expand=True)
+                for t in e:
+                    T=util.parse_ics(t.data,str(t))
+                    n=T["url"]+"_"+str(today+relativedelta.relativedelta(days=d))
+                    self.events["data"][n]=T
+                e=calendar.date_search(start=today+relativedelta.relativedelta(days=-d), end=today+relativedelta.relativedelta(days=-d+1), expand=True)
+                for t in e:
+                    T=util.parse_ics(t.data,str(t))
+                    n=T["url"]+"_"+str(today+relativedelta.relativedelta(days=d))
+                    self.events["data"][n]=T
+            pickle.dump(self.events,open( self.path+"/events_cache.p", "wb"))
+
     def exclude_caldav_event(self,slots,days=30):
-        config = dotenv_values(".env")
-        caldav_url = config["caldav_url"]
-        username = config["username"]
-        password = config["password"]
-        cal=config["cal"]
-        client = caldav.DAVClient(url=caldav_url, username=username, password=password)
-        my_principal = client.principal()
-        calendars = my_principal.calendars()
-        calendar = my_principal.calendar(name=cal)
+        self.load_calendar_events()
+
         blocked=[]
-        local_timezone = pytz.timezone('Europe/Berlin')
-        now = datetime.datetime.now(local_timezone)
-        today=local_timezone.localize(datetime.datetime(now.year, now.month, now.day)) #.replace(tzinfo=local_timezone).astimezone(local_timezone)
-        for d in range(days):
-            events=calendar.date_search(start=today+relativedelta.relativedelta(days=d), end=today+relativedelta.relativedelta(days=d+1), expand=True)
-            for t in events:
-                T=util.parse_ics(t.data,str(t))
-                if not T["transp"]:
-                    blocked.append({"dtstart":T["dtstart"].replace(tzinfo=None),"dtend":T["dtend"].replace(tzinfo=None),"summary":T["summary"]})
+        for T in self.events["data"]:
+            if not self.events["data"][T]["transp"]:
+                blocked.append({"dtstart":self.events["data"][T]["dtstart"].replace(tzinfo=None),"dtend":self.events["data"][T]["dtend"].replace(tzinfo=None),"summary":self.events["data"][T]["summary"]})
+
         slots2=[]
         for i in range(len(slots)):
             excl=False
@@ -307,6 +335,7 @@ class taskcollection:
                             changed=True
 
     def schedule(self,prioritycutoff=0,slotduration=15,futuredays=30):
+        self.load_calendar_events() #forceupdate=True)
         problems=[]
         self.recursive_dependencies()
 
@@ -358,16 +387,17 @@ class taskcollection:
             slots=copy.deepcopy(allslots)
             #exclude slots that are out of work times
             slots2=[]
-            #not on weekends
+            config = dotenv_values(".env")
+            act_slots=eval(config["active_slots"])
+            
+            #exclude
             for i in range(len(slots)):
-                excl=False
-                if slots[i]["start"].weekday()>=6:
-                    excl=True
-                if slots[i]["start"].hour<8:
-                    excl=True
-                if slots[i]["start"].hour>=17:
-                    excl=True
-                if not excl:
+                act=False
+                for s in act_slots:
+                    if slots[i]["start"].weekday()==s[0] and slots[i]["start"].hour+slots[i]["start"].minute/60.0>=s[1] and slots[i]["end"].hour+slots[i]["end"].minute/60.0<=s[2]:
+                        act=True
+                        break
+                if act:
                     slots2.append(slots[i])
     
             #exclude slots that are blocked by events
@@ -563,6 +593,21 @@ class taskcollection:
                 tused=self.tasks[ip].get_used(start=start,end=end)
                 ttot=ttot+tused
             self.tasks[it].tmp["used_time"]=ttot+self.tasks[it].get_used(start=start,end=end)
+
+    def event_time(self,start,end):
+        self.load_calendar_events()
+        ttot=0
+        for T in self.events["data"]:
+            if not self.events["data"][T]["transp"]:
+                if self.events["data"][T]["summary"].startswith("NA"):
+                    continue
+                if self.events["data"][T]["description"].startswith("NA"):
+                    continue
+                if self.events["data"][T]["dtstart"].replace(tzinfo=None)>=start and self.events["data"][T]["dtend"].replace(tzinfo=None)<=end:
+                    tstart=max(start,self.events["data"][T]["dtstart"].replace(tzinfo=None))
+                    tend=min(end,self.events["data"][T]["dtend"].replace(tzinfo=None))
+                    ttot=ttot+(tend-tstart).total_seconds()/3600.0
+        return ttot
     
     def get_items_at_level(self,level=1):
         self.buf=[]
