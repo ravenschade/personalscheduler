@@ -24,7 +24,7 @@ class taskcollection:
 
     def read(self):
         if os.path.exists(self.path):
-            print("reading task collection from",self.path)
+#            print("reading task collection from",self.path)
             for p in os.listdir(self.path+"/tasks/"):
                 t=task.task()
                 t.read_from_file(self.path+"/tasks/"+p)

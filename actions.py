@@ -105,6 +105,11 @@ else:
                     result=inputs.select_from_set("Problems",ret["problems"])
                 elif result=="partial schedule":
                     result=inputs.select_from_set("Partial Schedule",ret["slots_compressed"])
+        elif result=="stop work on task":
+            col=taskcollection.taskcollection(args.path)
+            #stop all other running tasks
+            col.stop_all_tasks()
+            col.write()
         elif result=="import":
             col=taskcollection.taskcollection(args.path)
             print("Trying to import from webdav, please wait")
