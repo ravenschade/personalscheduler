@@ -91,7 +91,7 @@ else:
 
         elif result=="schedule":
             col=taskcollection.taskcollection(args.path)
-            ret=col.schedule(prioritycutoff=0)
+            ret=col.schedule(prioritycutoff=-1)
             if ret["success"]:
                 print("scheduling succesful!")
                 result=inputs.select_from_set("Schedule",ret["slots_compressed"])
