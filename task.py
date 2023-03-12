@@ -5,6 +5,8 @@ import util
 import timeslot
 import taskcollection
 import datetime
+import pytz
+from dateutil import relativedelta
 
 class task:
     jsonpath=""
@@ -96,6 +98,24 @@ class task:
     def __str__(self):
         return json.dumps(self.data, indent = 4, sort_keys=True, default=util.serialize_datetime)
 
+    def get_used(self,start=None,end=None):
+        tused=0
+        for ts in self.data["timeslots"]:
+            tend=ts["end"]
+            tstart=datetime.datetime.fromisoformat(ts["start"])
+            if tend is None:
+                tend=datetime.datetime.now()
+            else:
+                tend=datetime.datetime.fromisoformat(ts["end"])
+            if not(start is None):
+                tend=max(tend,start)
+                tstart=max(tstart,start)
+            if not(end is None):
+                tend=min(tend,end)
+                tstart=min(tstart,end)
+            tused=tused+(tend-tstart).total_seconds()/3600.0
+        return tused
+
     def modify_interactive(self,col=None):
         while True:
             actions=[]
@@ -115,14 +135,7 @@ class task:
             ttot=0
             for ts in self.data["estworktime"]:
                 ttot=ttot+ts["duration"]
-            tused=0
-            for ts in self.data["timeslots"]:
-                tend=ts["end"]
-                if tend is None:
-                    tend=datetime.datetime.now()
-                else:
-                    tend=datetime.datetime.fromisoformat(ts["end"])
-                tused=tused+(tend-datetime.datetime.fromisoformat(ts["start"])).total_seconds()/3600.0
+            tused=self.get_used()
             left=ttot-tused
             actions.append("add to estimated work time of "+str(ttot)+" hours, left are "+str(left)+" hours")
             actions.append("back")

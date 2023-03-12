@@ -6,6 +6,7 @@ import task
 import taskcollection
 import inputs 
 import timeslot
+from dateutil import relativedelta
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-s', '--stop',action='store_true')
@@ -42,7 +43,18 @@ else:
            print("No Task is running")
         else:
            print("Task",r,"running")
-        actions=["start work on task","modify task","schedule","create task","stop work on task","import","exit"]
+
+        days=7
+        now=datetime.datetime.now()
+        tl=datetime.datetime(now.year, now.month,now.day,0,0)+relativedelta.relativedelta(days=-days)
+        col.used_time(start=tl,end=now)
+        l=col.get_items_at_level(level=1)
+        s="Worktime stats ("+str(days)+" days):"
+        for i in l:
+            s=s+" "+col.tasks[i].data["name"]+" "+str(col.tasks[i].tmp["used_time"])+","
+        print(s)
+
+        actions=["start work on task","modify task","schedule","create task","stop work on task","import","used time","exit"]
         result=inputs.select_from_set("Action",actions)
 
         if result=="create task":
@@ -94,6 +106,14 @@ else:
             col=taskcollection.taskcollection(args.path)
             print("Trying to import from webdav, please wait")
             col.import_caldav()
+        elif result=="used time":
+            col=taskcollection.taskcollection(args.path)
+            days=inputs.input_int("How many days into the past",emptyallowed=False)
+            now=datetime.datetime.now()
+            tl=datetime.datetime(now.year, now.month,now.day,0,0)+relativedelta.relativedelta(days=-days)
+            print("used time from",tl,"to",now)
+            col.used_time(start=tl,end=now)
+            parent=col.select_task(search=None,completed=True,fields_tmp=["used_time"])
             
         elif result=="exit":
             print("bye")

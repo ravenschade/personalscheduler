@@ -279,17 +279,13 @@ class taskcollection:
                 slots2.append(slots[i])
         return slots2
 
-
-    def schedule(self,prioritycutoff=0,slotduration=15,futuredays=30):
-        problems=[]
-        #extend due dates from parents to children without due dates
+    def recursive_dependencies(self):
         #introduce indirect due date
         for ip in self.tasks:
             self.tasks[ip].tmp={}
             self.tasks[ip].tmp["due_implicit"]=self.tasks[ip].data["due"]
             self.tasks[ip].tmp["subtasks_implicit"]=copy.deepcopy(self.tasks[ip].data["subtasks"])
             self.tasks[ip].tmp["slots"]=[]
-
         changed=True
         while changed:
             changed=False
@@ -309,6 +305,11 @@ class taskcollection:
                         if j not in self.tasks[ip].tmp["subtasks_implicit"]:
                             self.tasks[ip].tmp["subtasks_implicit"].append(j)
                             changed=True
+
+    def schedule(self,prioritycutoff=0,slotduration=15,futuredays=30):
+        problems=[]
+        self.recursive_dependencies()
+
         #check for leaf tasks with due but no duration
         incompletetasks=[]
         for ip in self.tasks:
@@ -393,6 +394,8 @@ class taskcollection:
                         continue
                 if self.tasks[it].data["completed"]==100:
                     self.tasks[it].tmp["to_be_scheduled"]=False
+                    self.tasks[it].tmp["needed_slots"]=0
+                    continue
 
                 if ( self.tasks[it].tmp["due_implicit"] is None):
                     self.tasks[it].tmp["to_be_scheduled"]=False
@@ -401,6 +404,7 @@ class taskcollection:
                 if datetime.datetime.fromisoformat(self.tasks[it].tmp["due_implicit"])>tend:
                     self.tasks[it].tmp["to_be_scheduled"]=False
                     self.tasks[it].tmp["needed_slots"]=0
+                    continue
                 else:
                     #go trough slices
                     for i in range(len(slots)):
@@ -417,10 +421,17 @@ class taskcollection:
                     ttot=0
                     for ts in self.tasks[it].data["estworktime"]:
                         ttot=ttot+ts["duration"]
-                    c=0.0
-                    if not(self.tasks[it].data["completed"] is None):
-                        c=float(self.tasks[it].data["completed"])
-                    nslots=math.ceil(ttot/(slotduration/60.0)*(100.0-c)/100.0)
+                    tused=self.tasks[it].get_used()
+                    if tused>ttot:
+                        problems.append("Task "+self.tasks[it].data["name"]+" has used more time ("+str(tused)+") than estimated ("+str(ttot)+")")
+                        checkok=False
+
+
+#                    c=0.0
+#                    if not(self.tasks[it].data["completed"] is None):
+#                        c=float(self.tasks[it].data["completed"])
+#                    nslots=math.ceil(((ttot)*(100.0-c)/100.0)/(slotduration/60.0))
+                    nslots=math.ceil((ttot-tused)/(slotduration/60.0))
                     if nslots==0:
                         self.tasks[it].tmp["to_be_scheduled"]=False
                         self.tasks[it].tmp["needed_slots"]=0
@@ -542,3 +553,27 @@ class taskcollection:
             slots_compressed.append(str(start)+" - "+str(end)+" "+self.tasks[prev].data["name"]+" (due "+str(self.tasks[prev].data["due"])+ ", eff. due "+str(self.tasks[prev].tmp["due_implicit"])+")")
             ret={"slots_compressed":slots_compressed,"slots":slots,"success":checkok,"nslots_needed":nslots_needed,"nslots_available":nslots_available,"problems":problems}
             return ret
+
+
+    def used_time(self,start=None,end=None):
+        self.recursive_dependencies()
+        for it in self.tasks:
+            ttot=0
+            for ip in set(self.tasks[it].tmp["subtasks_implicit"]):
+                tused=self.tasks[ip].get_used(start=start,end=end)
+                ttot=ttot+tused
+            self.tasks[it].tmp["used_time"]=ttot+self.tasks[it].get_used(start=start,end=end)
+    
+    def get_items_at_level(self,level=1):
+        self.buf=[]
+        self.buf2=[]
+        self.buf_paths=[]
+        self.tasks_to_list(element=0,level=0,path=[0],fields=None,fields_tmp=None,completed=True)
+        ret=set()
+        for p in self.buf_paths:
+            if len(p)>=level:
+                ret.add(p[level])
+        return ret
+
+
+
