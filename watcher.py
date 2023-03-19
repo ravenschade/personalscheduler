@@ -9,7 +9,7 @@ from dotenv import dotenv_values
 import caldav
 import webbrowser
 import util
-from gotify import Gotify
+#from gotify import Gotify
 
 import taskcollection
 import subprocess
@@ -18,13 +18,15 @@ import subprocess
 import imap_tools
 from imap_tools import MailBox, AND,A
 
-import signal_wrapper
+#import signal_wrapper
 
 import task
 import taskcollection
 import requests
 from requests.auth import HTTPBasicAuth
 import speech_to_text
+
+import matrix_wrapper
 
 def main():
     config = dotenv_values(".env")
@@ -44,9 +46,11 @@ def main():
     present_hosts=config["present_hosts"].split(",")
     presence_stop_delay=int(config["presence_stop_delay"])
     presence_start_delay=int(config["presence_start_delay"])
-    gotify_url=config["gotify_url"]
-    gotify_token=config["gotify_token"]
+    #gotify_url=config["gotify_url"]
+    #gotify_token=config["gotify_token"]
     
+    matrix_dest=config["matrix_dest"]
+
     client = caldav.DAVClient(url=caldav_url, username=username, password=password)
     my_principal = client.principal()
 
@@ -103,9 +107,9 @@ def main():
                     break
             if present and lastpresent+presence_start_delay*60<=time.time() and not overlap:
                 print("someone has been present for at least "+str(presence_start_delay)+" minutes but no task is running, sending notification")
-                gotify = Gotify(base_url=gotify_url,app_token=gotify_token)
-                gotify.create_message("NO TASK IS RUNNING!",title="personalscheduler",priority=10)
-
+                #gotify = Gotify(base_url=gotify_url,app_token=gotify_token)
+                #gotify.create_message("NO TASK IS RUNNING!",title="personalscheduler",priority=10)
+                matrix_wrapper.send(matrix_dest,"NO TASK IS RUNNING!")
         with MailBox(imap_host,port=imap_port).login(imap_user,imap_password, initial_folder='INBOX') as mailbox:
             #flags = (imap_tools.MailMessageFlags.SEEN, imap_tools.MailMessageFlags.FLAGGED
             for msg in mailbox.fetch(A(flagged=True),mark_seen=False):
@@ -126,7 +130,7 @@ def main():
                 col.add_task(t,parent=p)
                 col.write()              
         #get input from signal
-        got=signal_wrapper.signal_receive()
+        got=[] #signal_wrapper.signal_receive()
         print("got=",got)
         for g in got:
             if g["msg_type"]=="text":

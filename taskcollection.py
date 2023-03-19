@@ -245,6 +245,7 @@ class taskcollection:
         told=False
         if os.path.isfile(self.path+"/events_cache.p"):
             self.events=pickle.load(open(self.path+"/events_cache.p", "rb"))
+            print("Cache date",self.events["state"])
             if datetime.datetime.now()-self.events["state"]>=datetime.timedelta(hours=2):
                 told=True
         else:
