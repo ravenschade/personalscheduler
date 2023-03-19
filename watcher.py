@@ -130,7 +130,7 @@ def main():
                 col.add_task(t,parent=p)
                 col.write()              
         #get input from signal
-        got=[] #signal_wrapper.signal_receive()
+        got=matrix_wrapper.receive(matrix_dest)
         print("got=",got)
         for g in got:
             if g["msg_type"]=="text":
@@ -161,7 +161,7 @@ def main():
                         time.sleep(1)
                 text=""
                 #transcribe if aac
-                if fn.endswith(".aac"):
+                if fn.endswith(".ogg") or fn.endswith(".aac"):
                     text=speech_to_text.speech_to_text(path)
 
                 tomorrow=datetime.datetime.combine(datetime.datetime.now(), datetime.time.min)+datetime.timedelta(days=1)

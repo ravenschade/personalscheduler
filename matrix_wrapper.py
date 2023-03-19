@@ -3,6 +3,8 @@ from dotenv import dotenv_values
 from subprocess import Popen, PIPE, STDOUT
 from os.path import expanduser
 import json
+import os
+import time
 
 def send(dest,msg):
     home = expanduser("~")
@@ -12,12 +14,17 @@ def send(dest,msg):
     output = p.stdout.read().decode()
     print(output)
 
+
+
 def receive(src):
     config = dotenv_values(".env")
     home = expanduser("~")
 
     got=[]
-    cmd=home+"/.local/bin/matrix-commander -s "+home+"/.config/matrix-commander/store --listen once  --output=json"
+    now=time.time()
+    d="media/"+str(now)
+    os.mkdir(d)
+    cmd=home+"/.local/bin/matrix-commander -s "+home+"/.config/matrix-commander/store --listen once --output=json --download-media "+d
     p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=STDOUT, close_fds=True)
     output = p.stdout.read().decode()
     print(output)
@@ -28,25 +35,11 @@ def receive(src):
             if j["source"]["sender"]==src:
                 if j["source"]["content"]["msgtype"]=="m.text":
                     got.append({"msg_type":"text","text":j["source"]["content"]["body"]})
-                elif j["source"]["content"]["msgtype"]=="m.audio":
-                    url=j["source"]["content"]["file"]["url"]
-                    h=j["source"]["content"]["file"]["hashes"]["sha256"]
-                    cmd=home+"/.local/bin/matrix-commander -s "+home+"/.config/matrix-commander/store --download +"+url+" --file-name media/"+h+".ogg"
-                    p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=STDOUT, close_fds=True)
-                    output = p.stdout.read().decode()
-                    print(output)
-                    got.append({"msg_type":"file","path":"media/"+h+".ogg"})
-                elif j["source"]["content"]["msgtype"]=="m.image":
-                    url=j["source"]["content"]["file"]["url"]
-                    h=j["source"]["content"]["file"]["hashes"]["sha256"]
-                    cmd=home+"/.local/bin/matrix-commander -s "+home+"/.config/matrix-commander/store --download +"+url+" --file-name media/"+h+".jpg"
-                    p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=STDOUT, close_fds=True)
-                    output = p.stdout.read().decode()
-                    print(output)
-                    got.append({"msg_type":"file","path":"media/"+h+".jpg"})
-
     except Exception as inst:
         print(inst)
+    for file in os.listdir(d):
+        a=os.path.join(d, file)
+        got.append({"msg_type":"file","path":a})
     #for l in output.splitlines():
     #    if l.startswith("Body: "):
     #        s=l.split("Body: ")[1]

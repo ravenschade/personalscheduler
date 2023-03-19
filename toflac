@@ -1,2 +1,2 @@
 #!/bin/bash
-ffmpeg -i $1 -c:a flac -ar 16000 -ac 1 /tmp/audio.flac -y
+ffmpeg -i "$1" -c:a flac -ar 16000 -ac 1 /tmp/audio.flac -y

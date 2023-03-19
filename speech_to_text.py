@@ -5,7 +5,7 @@ from subprocess import Popen, PIPE, STDOUT
 
 def speech_to_text(audio_file):
     #convert to flac
-    cmd="./toflac "+audio_file
+    cmd="./toflac \""+audio_file+"\""
     p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=STDOUT, close_fds=True)
     output = p.stdout.read().decode()
     print(output)
