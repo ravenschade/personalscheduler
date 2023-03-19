@@ -1,9 +1,10 @@
 from google.cloud import speech_v1 as speech
 from dotenv import dotenv_values
 import io
+import json
 from subprocess import Popen, PIPE, STDOUT
 
-def speech_to_text(audio_file):
+def speech_to_text_google(audio_file):
     #convert to flac
     cmd="./toflac \""+audio_file+"\""
     p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=STDOUT, close_fds=True)
@@ -34,4 +35,14 @@ def speech_to_text(audio_file):
         print(f"Confidence: {confidence:.0%}")
     return ret
 
-#speech_to_text("/home/robert/.local/share/signal-cli/attachments/k26MeUS1WzznKy1b4uR9.aac")
+def speech_to_text_whisper(audio_file):
+    #convert to flac
+    cmd="bash whisper_wrapper.sh \""+audio_file+"\""
+    p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=STDOUT, close_fds=True)
+    output = p.stdout.read().decode()
+    print(output)
+
+    t=".".join(audio_file.split(".")[0:-1])+".json"
+    with open(t, 'r') as f:
+        data = json.load(f)
+    return data["text"]

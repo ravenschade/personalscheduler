@@ -162,7 +162,8 @@ def main():
                 text=""
                 #transcribe if aac
                 if fn.endswith(".ogg") or fn.endswith(".aac"):
-                    text=speech_to_text.speech_to_text(path)
+                    text=speech_to_text.speech_to_text_whisper(path)
+                    matrix_wrapper.send(matrix_dest,"text recognised: "+text)
 
                 tomorrow=datetime.datetime.combine(datetime.datetime.now(), datetime.time.min)+datetime.timedelta(days=1)
                 t=task.task()

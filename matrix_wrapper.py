@@ -40,6 +40,8 @@ def receive(src):
     for file in os.listdir(d):
         a=os.path.join(d, file)
         got.append({"msg_type":"file","path":a})
+    if len(os.listdir(d))==0:
+        os.rmdir(d)
     #for l in output.splitlines():
     #    if l.startswith("Body: "):
     #        s=l.split("Body: ")[1]
