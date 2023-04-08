@@ -57,7 +57,7 @@ else:
         s="Event stats (last "+str(days)+" days): "+"{:.2f}".format(event_time)
         print(s)
 
-        actions=["start work on task","modify task","schedule","create task","stop work on task","import","used time","exit"]
+        actions=["start work on task","modify task","schedule","create task","stop work on task","import","used time","batch action","exit"]
         result=inputs.select_from_set("Action",actions)
 
         if result=="create task":
@@ -94,12 +94,21 @@ else:
 
         elif result=="schedule":
             col=taskcollection.taskcollection(args.path)
-            ret=col.schedule(prioritycutoff=-1)
+            sec=col.get_items_at_level()
+            sections=[]
+            for s in sec:
+                sections.append(col.tasks[s].data["name"])
+
+            result=inputs.select_from_set("Select",sections)
+
+            ret=col.schedule(prioritycutoff=-1,section=result)
             if ret["success"]:
                 print("scheduling succesful!")
                 result=inputs.select_from_set("Schedule",ret["slots_compressed"])
             else:
-                actions=["problems","partial schedule","back"]
+                for p in ret["problems"]:
+                    print(p)
+                actions=["partial schedule","problems","back"]
                 result=inputs.select_from_set("Select",actions)
                 if result=="problems":
                     result=inputs.select_from_set("Problems",ret["problems"])
@@ -122,7 +131,19 @@ else:
             print("used time from",tl,"to",now)
             col.used_time(start=tl,end=now)
             parent=col.select_task(search=None,completed=True,fields_tmp=["used_time"])
-            
+        elif result=="batch action":
+            col=taskcollection.taskcollection(args.path)
+            bactions=["complete"]
+            result=inputs.select_from_set("Batch Action",bactions)
+            if result=="complete":
+                ta=col.select_task(search=None,multi=True)
+                print("ta=",ta)
+                for t in ta:
+                    col.tasks[t].data["completed"]=100
+            col.write()
+                
+
+                       
         elif result=="exit":
             print("bye")
             break

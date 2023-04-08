@@ -73,7 +73,7 @@ def main():
         overlap=False
         for t in calevents:
             T=util.parse_ics(t.data,str(t))
-            if T["dtstart"]<=now and T["dtend"]>=now:
+            if T["dtstart"]<=now and T["dtend"]>=now and not T["transp"]:
                 print("overlapping event=",T)
                 overlap=True
 
@@ -181,4 +181,9 @@ def main():
         time.sleep(60)
 
 if __name__ == "__main__":
-    main()
+    while True:
+        try:
+            main()
+        except:
+            pass
+

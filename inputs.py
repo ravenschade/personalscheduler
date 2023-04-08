@@ -100,11 +100,22 @@ def input_tags(text,emptyallowed=False,alltags=None):
         return result
 
 
-def select_from_set(text,options,key=None):
-    result = inquirer.select(message=text+":", choices=options).execute()
-    if not(key is None):
-        return key[options.index(result)]
+def select_from_set(text,options,key=None,multi=False):
+    if multi:
+        result = inquirer.checkbox(message=text+":", choices=options).execute()
+        print(result)
+        if not(key is None):
+            keys=[]
+            for r in result:
+                keys.append(key[options.index(r)])
+            return keys
+        else:
+            return result
     else:
-        return result
+        result = inquirer.select(message=text+":", choices=options).execute()
+        if not(key is None):
+            return key[options.index(result)]
+        else:
+            return result
 
 

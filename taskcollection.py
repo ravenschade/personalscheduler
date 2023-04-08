@@ -91,7 +91,7 @@ class taskcollection:
         self.tasks_to_list(0,0)
         return "\n".join(self.buf)
 
-    def select_task(self,search=None,fields=None,fields_tmp=None,completed=False):
+    def select_task(self,search=None,fields=None,fields_tmp=None,completed=False,multi=False):
         opt=[]
         self.buf=[]
         self.buf2=[]
@@ -121,12 +121,12 @@ class taskcollection:
                     buf.append(self.buf[i])
                     buf2.append(self.buf2[i])
             if len(buf)>0:
-                result=inputs.select_from_set("Select Task",buf,buf2)
+                result=inputs.select_from_set("Select Task",buf,buf2,multi=multi)
             else:
                 print("filter search resulted in zero hits, showing full list")
-                result=inputs.select_from_set("Select Task",self.buf,self.buf2)
+                result=inputs.select_from_set("Select Task",self.buf,self.buf2,multi=multi)
         else:
-            result=inputs.select_from_set("Select Task",self.buf,self.buf2)
+            result=inputs.select_from_set("Select Task",self.buf,self.buf2,multi=multi)
         return result
 
     def tasks_to_list(self,element=0,level=0,path=[0],fields=None,fields_tmp=None,completed=False):
@@ -313,6 +313,7 @@ class taskcollection:
         for ip in self.tasks:
             self.tasks[ip].tmp={}
             self.tasks[ip].tmp["due_implicit"]=self.tasks[ip].data["due"]
+            self.tasks[ip].tmp["all_parents"]=[]
             self.tasks[ip].tmp["subtasks_implicit"]=copy.deepcopy(self.tasks[ip].data["subtasks"])
             self.tasks[ip].tmp["slots"]=[]
         changed=True
@@ -334,8 +335,15 @@ class taskcollection:
                         if j not in self.tasks[ip].tmp["subtasks_implicit"]:
                             self.tasks[ip].tmp["subtasks_implicit"].append(j)
                             changed=True
+        #add parents
+        for ip in self.tasks:
+            for i in self.tasks[ip].tmp["subtasks_implicit"]:
+                self.tasks[i].tmp["all_parents"].append(ip)
 
-    def schedule(self,prioritycutoff=0,slotduration=15,futuredays=30):
+
+
+
+    def schedule(self,prioritycutoff=0,slotduration=15,futuredays=7*6,section=None):
         self.load_calendar_events() #forceupdate=True)
         problems=[]
         self.recursive_dependencies()
@@ -375,7 +383,6 @@ class taskcollection:
                             overdue.append(ip)
 
             #settings
-            
             td=datetime.timedelta(minutes=slotduration)
             allslots=[]
             t0=datetime.datetime.min + math.ceil((datetime.datetime.now() - datetime.datetime.min) / td) * td
@@ -389,13 +396,18 @@ class taskcollection:
             #exclude slots that are out of work times
             slots2=[]
             config = dotenv_values(".env")
-            act_slots=eval(config["active_slots"])
+            act_slots_all=eval(config["active_slots"])
+            act_slots=[]
+            if section is None:
+                act_slots=act_slots_all
+            else:
+                act_slots=act_slots_all[section]            
             
             #exclude
             for i in range(len(slots)):
                 act=False
                 for s in act_slots:
-                    if slots[i]["start"].weekday()==s[0] and slots[i]["start"].hour+slots[i]["start"].minute/60.0>=s[1] and slots[i]["end"].hour+slots[i]["end"].minute/60.0<=s[2]:
+                    if slots[i]["start"].weekday()==s[0] and slots[i]["start"].hour+slots[i]["start"].minute/60.0>=s[1] and slots[i]["end"].hour+slots[i]["end"].minute/60.0<=s[2] and slots[i]["end"].hour+slots[i]["end"].minute/60.0>=s[1]:
                         act=True
                         break
                 if act:
@@ -432,6 +444,17 @@ class taskcollection:
                     self.tasks[it].tmp["to_be_scheduled"]=False
                     self.tasks[it].tmp["needed_slots"]=0
                     continue
+                #filter tasks
+                if not(section is None):
+                    found=False
+                    for p in self.tasks[it].tmp["all_parents"]:
+                        if self.tasks[p].data["name"]==section:
+                            found=True
+                    if not found:
+                        self.tasks[it].tmp["to_be_scheduled"]=False
+                        self.tasks[it].tmp["needed_slots"]=0
+                        continue
+
                 if datetime.datetime.fromisoformat(self.tasks[it].tmp["due_implicit"])>tend:
                     self.tasks[it].tmp["to_be_scheduled"]=False
                     self.tasks[it].tmp["needed_slots"]=0
@@ -504,7 +527,7 @@ class taskcollection:
                     checkok=False
                 else:
                     self.tasks[it].tmp["to_be_scheduled"]=False
-                    problems.append("First scheduled overdue task"+self.tasks[it].data["name"]+" first")
+                    problems.append("First scheduled overdue task "+self.tasks[it].data["name"]+" first")
             
             #check basic necessary conditions
             #check for solution for individual tasks
@@ -516,7 +539,7 @@ class taskcollection:
             #schedule: earliest deadline first
             for si in range(len(slots)):
                 #try with decreasing importance
-                for minprio in [8,5,2,0]:
+                for minprio in [0]:
                     if slots[si]["used"]:
                         continue
                     viable_tasks=[]
