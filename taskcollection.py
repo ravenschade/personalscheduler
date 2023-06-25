@@ -591,7 +591,7 @@ class taskcollection:
                         start=slots[i]["start"]
                         end=slots[i]["end"]
                     elif slots[i]["task"]!=prev:
-                        slots_compressed.append(str(start)+" - "+str(end)+" "+self.tasks[prev].data["name"]+" (due "+str(self.tasks[prev].data["due"])+ ", eff. due "+str(self.tasks[prev].tmp["due_implicit"])+")")
+                        slots_compressed.append(str(start)+" - "+str(end)+" "+self.tasks[prev].data["name"]+" (due "+str(self.tasks[prev].data["due"])+ ", eff. due "+str(self.tasks[prev].tmp["due_implicit"])+") "+str(prev))
                         prev=slots[i]["task"]
                         start=slots[i]["start"]
                         end=slots[i]["end"]
@@ -599,12 +599,12 @@ class taskcollection:
                         if end==slots[i]["start"]: 
                             end=slots[i]["end"]
                         else:
-                            slots_compressed.append(str(start)+" - "+str(end)+" "+self.tasks[prev].data["name"]+" (due "+str(self.tasks[prev].data["due"])+ ", eff. due "+str(self.tasks[prev].tmp["due_implicit"])+")")
+                            slots_compressed.append(str(start)+" - "+str(end)+" "+self.tasks[prev].data["name"]+" (due "+str(self.tasks[prev].data["due"])+ ", eff. due "+str(self.tasks[prev].tmp["due_implicit"])+") "+str(prev))
                             prev=slots[i]["task"]
                             start=slots[i]["start"]
                             end=slots[i]["end"]
 
-            slots_compressed.append(str(start)+" - "+str(end)+" "+self.tasks[prev].data["name"]+" (due "+str(self.tasks[prev].data["due"])+ ", eff. due "+str(self.tasks[prev].tmp["due_implicit"])+")")
+            slots_compressed.append(str(start)+" - "+str(end)+" "+self.tasks[prev].data["name"]+" (due "+str(self.tasks[prev].data["due"])+ ", eff. due "+str(self.tasks[prev].tmp["due_implicit"])+") "+str(prev))
             ret={"slots_compressed":slots_compressed,"slots":slots,"success":checkok,"nslots_needed":nslots_needed,"nslots_available":nslots_available,"problems":problems}
             return ret
 

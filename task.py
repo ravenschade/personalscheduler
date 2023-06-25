@@ -45,17 +45,17 @@ class task:
         t=timeslot.timeslot(duration=estworktime)
         self.data["estworktime"]=[t.data]
         
-        if tags is None:
-            if not (tasks is None):
-                alltags=tasks.get_all_tags()
-            else:
-                alltags=[]
-            tags=inputs.input_tags("Tag",alltags=alltags)
-        self.data["tags"]=tags
+#        if tags is None:
+#            if not (tasks is None):
+#                alltags=tasks.get_all_tags()
+#            else:
+#                alltags=[]
+#            tags=inputs.input_tags("Tag",alltags=alltags)
+        self.data["tags"]=[]
 
-        if tasktype is None:
-            tasktype=inputs.select_from_set("Type of task",["todo","wait"])
-        self.data["tasktype"]=tasktype
+        #if tasktype is None:
+        #    tasktype=inputs.select_from_set("Type of task",["todo","wait"])
+        self.data["tasktype"]="todo"
 
         if priority is None:
             priority=inputs.input_int("Priority 0-10",vmin=0,vmax=10)
@@ -145,8 +145,11 @@ class task:
             if result==actions[0]:
                 self.data["name"]=inputs.input_string("New task name")
             elif result==actions[1]:
-                due=inputs.input_date("Due date")
-                self.data["due"]=due.isoformat()
+                due=inputs.input_date("Due date",emptyallowed=True)
+                if due is None:
+                    self.data["due"]=due
+                else:
+                    self.data["due"]=due.isoformat()
             elif result==actions[2]:
                 eligible=inputs.input_date("Eligible from",emptyallowed=True,limit=datetime.datetime.fromisoformat(self.data["due"]))
                 self.data["eligible"]=eligible.isoformat()

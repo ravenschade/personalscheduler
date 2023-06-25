@@ -53,7 +53,7 @@ def input_date(text,emptyallowed=False,future=True,limit=None):
         if future:
             dayiter=1
         now=datetime.datetime.now()
-        options={"enter date directly":None}
+        options={"enter date directly":None,"None":None}
         for d in range(30):
             D=now+datetime.timedelta(days=d*dayiter)
             if (limit is None) or (future and D<=limit) or (not future and D>=limit):
@@ -70,6 +70,8 @@ def input_date(text,emptyallowed=False,future=True,limit=None):
                         break
                     except:
                         pass
+            elif result[0]=="None":
+                return None
             else:
                 d=result[0].split()[0]
                 s=datetime.datetime.strptime(d, '%Y-%m-%d')

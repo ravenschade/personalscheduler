@@ -102,6 +102,8 @@ else:
             result=inputs.select_from_set("Select",sections)
 
             ret=col.schedule(prioritycutoff=-1,section=result)
+            result=None
+            resp=None
             if ret["success"]:
                 print("scheduling succesful!")
                 result=inputs.select_from_set("Schedule",ret["slots_compressed"])
@@ -111,9 +113,31 @@ else:
                 actions=["partial schedule","problems","back"]
                 result=inputs.select_from_set("Select",actions)
                 if result=="problems":
-                    result=inputs.select_from_set("Problems",ret["problems"])
+                    resp=inputs.select_from_set("Problems",ret["problems"])
                 elif result=="partial schedule":
-                    result=inputs.select_from_set("Partial Schedule",ret["slots_compressed"])
+                    resp=inputs.select_from_set("Partial Schedule",ret["slots_compressed"])
+            if result=="partial schedule" or ret["success"]:
+                sid=None
+                try:
+                    sid=int(resp.split(" ")[-1])
+                except:
+                    pass
+                if not (sid is None):
+                    actions2=["start","modify task"]
+                    result2=inputs.select_from_set("Action",actions2)
+                    if result2=="start":
+                        #stop all other running tasks
+                        col.stop_all_tasks()
+                        #start task
+                        ts=timeslot.timeslot(start=datetime.datetime.now())
+                        col.tasks[sid].data["timeslots"].append(ts.data)
+                        col.write()
+                        
+                    elif result2=="modify task":
+                        col.tasks[sid].modify_interactive(col=col)
+                        col.write()
+
+
         elif result=="stop work on task":
             col=taskcollection.taskcollection(args.path)
             #stop all other running tasks
