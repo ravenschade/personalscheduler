@@ -339,11 +339,47 @@ class taskcollection:
         for ip in self.tasks:
             for i in self.tasks[ip].tmp["subtasks_implicit"]:
                 self.tasks[i].tmp["all_parents"].append(ip)
+        #get tags from parent if no own tags
+        for it in self.tasks:
+            if len(self.tasks[it].data["tags"])==0:
+                self.tasks[it].tmp["tags"]=[]
+                for ip in self.tasks[it].tmp["all_parents"]:
+                    for t in self.tasks[ip].data["tags"]:
+                        if not (t in self.tasks[it].tmp["tags"]):
+                            self.tasks[it].tmp["tags"].append(t)
+
+    def schedule_all(self,prioritycutoff=0,slotduration=15,futuredays=7*6):
+        tags=self.get_all_tags()
+        slots_compressed=[]
+        slots=[]
+        starts=[]
+        success=True
+        nslots_needed=0
+        nslots_available=0
+        nslots_available=0
+        problems=[]
+        for t in tags:
+            print(t)
+            ret=self.schedule(prioritycutoff=prioritycutoff,slotduration=slotduration,futuredays=futuredays,tag=t)
+            slots_compressed.extend(ret["slots_compressed"])
+            slots.extend(ret["slots"])
+            for s in ret["slots"]:
+                starts.append(s["start"])
+            success=success and ret["success"]
+            nslots_needed=nslots_needed+ret["nslots_needed"]
+            nslots_available=nslots_available+ret["nslots_available"]
+            nslots_available=nslots_available+ret["nslots_available"]
+            problems.extend(ret["problems"])
+        #sort slots
+        print(len(starts))
+        print(len(slots))
+        starts,slots = zip(*sorted(zip(starts,slots)))
+        slots_compressed=self.compress_slots(slots)
+        
+        return {"slots_compressed":slots_compressed,"slots":slots,"success":success,"nslots_needed":nslots_needed,"nslots_available":nslots_available,"problems":problems}
 
 
-
-
-    def schedule(self,prioritycutoff=0,slotduration=15,futuredays=7*6,section=None):
+    def schedule(self,prioritycutoff=0,slotduration=15,futuredays=7*6,tag=None):
         self.load_calendar_events() #forceupdate=True)
         problems=[]
         self.recursive_dependencies()
@@ -398,18 +434,25 @@ class taskcollection:
             config = dotenv_values(".env")
             act_slots_all=eval(config["active_slots"])
             act_slots=[]
-            if section is None:
-                act_slots=act_slots_all
+        
+            if tag is None:
+                raise RuntimeError("no tag was specified")
             else:
-                act_slots=act_slots_all[section]            
+                try:
+                    act_slots=act_slots_all[tag]            
+                except:
+                    raise RuntimeError("tag "+t+" has no time slot in config")
             
             #exclude
             for i in range(len(slots)):
                 act=False
                 for s in act_slots:
-                    if slots[i]["start"].weekday()==s[0] and slots[i]["start"].hour+slots[i]["start"].minute/60.0>=s[1] and slots[i]["end"].hour+slots[i]["end"].minute/60.0<=s[2] and slots[i]["end"].hour+slots[i]["end"].minute/60.0>=s[1]:
-                        act=True
-                        break
+                    if s[0]=="weekdays":
+                        if slots[i]["start"].weekday()==s[1] and slots[i]["start"].hour+slots[i]["start"].minute/60.0>=s[2] and slots[i]["end"].hour+slots[i]["end"].minute/60.0<=s[3] and slots[i]["end"].hour+slots[i]["end"].minute/60.0>=s[2]:
+                            act=True
+                            break
+                    else:
+                        raise RuntimeError("type of active slot "+s[0]+" is not implemented")
                 if act:
                     slots2.append(slots[i])
     
@@ -445,11 +488,10 @@ class taskcollection:
                     self.tasks[it].tmp["needed_slots"]=0
                     continue
                 #filter tasks
-                if not(section is None):
+                if not(tag is None):
                     found=False
-                    for p in self.tasks[it].tmp["all_parents"]:
-                        if self.tasks[p].data["name"]==section:
-                            found=True
+                    if tag in self.tasks[it].tmp["tags"]:
+                        found=True
                     if not found:
                         self.tasks[it].tmp["to_be_scheduled"]=False
                         self.tasks[it].tmp["needed_slots"]=0
@@ -580,33 +622,37 @@ class taskcollection:
                     problems.append("Task couldn't be scheduled: "+str(it)+" "+self.tasks[it].data["name"]+" due "+str(self.tasks[it].tmp["due_implicit"]))
                     checkok=False
             #compress slots
-            slots_compressed=[]
-            prev=0
-            start=None
-            end=None
-            for i in range(len(slots)):
-                if slots[i]["used"]:
-                    if prev==0:
-                        prev=slots[i]["task"]
-                        start=slots[i]["start"]
+            slots_compressed=self.compress_slots(slots)
+            ret={"slots_compressed":slots_compressed,"slots":slots,"success":checkok,"nslots_needed":nslots_needed,"nslots_available":nslots_available,"problems":problems}
+            return ret
+            
+    def compress_slots(self,slots):
+        slots_compressed=[]
+        prev=0
+        start=None
+        end=None
+        for i in range(len(slots)):
+            if slots[i]["used"]:
+                if prev==0:
+                    prev=slots[i]["task"]
+                    start=slots[i]["start"]
+                    end=slots[i]["end"]
+                elif slots[i]["task"]!=prev:
+                    slots_compressed.append(str(start)+" - "+str(end)+" "+self.tasks[prev].data["name"]+" (due "+str(self.tasks[prev].data["due"])+ ", eff. due "+str(self.tasks[prev].tmp["due_implicit"])+") "+str(prev))
+                    prev=slots[i]["task"]
+                    start=slots[i]["start"]
+                    end=slots[i]["end"]
+                else:
+                    if end==slots[i]["start"]: 
                         end=slots[i]["end"]
-                    elif slots[i]["task"]!=prev:
+                    else:
                         slots_compressed.append(str(start)+" - "+str(end)+" "+self.tasks[prev].data["name"]+" (due "+str(self.tasks[prev].data["due"])+ ", eff. due "+str(self.tasks[prev].tmp["due_implicit"])+") "+str(prev))
                         prev=slots[i]["task"]
                         start=slots[i]["start"]
                         end=slots[i]["end"]
-                    else:
-                        if end==slots[i]["start"]: 
-                            end=slots[i]["end"]
-                        else:
-                            slots_compressed.append(str(start)+" - "+str(end)+" "+self.tasks[prev].data["name"]+" (due "+str(self.tasks[prev].data["due"])+ ", eff. due "+str(self.tasks[prev].tmp["due_implicit"])+") "+str(prev))
-                            prev=slots[i]["task"]
-                            start=slots[i]["start"]
-                            end=slots[i]["end"]
 
-            slots_compressed.append(str(start)+" - "+str(end)+" "+self.tasks[prev].data["name"]+" (due "+str(self.tasks[prev].data["due"])+ ", eff. due "+str(self.tasks[prev].tmp["due_implicit"])+") "+str(prev))
-            ret={"slots_compressed":slots_compressed,"slots":slots,"success":checkok,"nslots_needed":nslots_needed,"nslots_available":nslots_available,"problems":problems}
-            return ret
+        slots_compressed.append(str(start)+" - "+str(end)+" "+self.tasks[prev].data["name"]+" (due "+str(self.tasks[prev].data["due"])+ ", eff. due "+str(self.tasks[prev].tmp["due_implicit"])+") "+str(prev))
+        return slots_compressed
 
 
     def used_time(self,start=None,end=None):

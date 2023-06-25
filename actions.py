@@ -94,14 +94,24 @@ else:
 
         elif result=="schedule":
             col=taskcollection.taskcollection(args.path)
-            sec=col.get_items_at_level()
-            sections=[]
-            for s in sec:
-                sections.append(col.tasks[s].data["name"])
+#            sec=col.get_items_at_level()
+#            sections=[]
+#            for s in sec:
+#                sections.append(col.tasks[s].data["name"])
+#            result=inputs.select_from_set("Select",sections)
+#            ret=col.schedule(prioritycutoff=-1,section=result)
+            actions=["all"]
+            tags=col.get_all_tags()
+            for t in tags:
+                actions.append(t)
+            result=inputs.select_from_set("Which tag to schedule",actions)
 
-            result=inputs.select_from_set("Select",sections)
-
-            ret=col.schedule(prioritycutoff=-1,section=result)
+            stag=[]
+            if result=="all":            
+                ret=col.schedule_all(prioritycutoff=-1)
+            else:    
+                ret=col.schedule(prioritycutoff=-1,tag=result)
+            
             result=None
             resp=None
             if ret["success"]:

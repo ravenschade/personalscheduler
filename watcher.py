@@ -140,7 +140,7 @@ def main():
                 t.input(tasks=col,name=g["text"],due=tomorrow,eligible=datetime.datetime.now(),estworktime=0.5,tags=["Mail"],priority=8,tasktype="todo",completed=0)
                 p=0
                 for it in col.tasks:
-                    if col.tasks[it].data["name"]=="From Smartphone":
+                    if col.tasks[it].data["name"]=="Staging":
                         p=it
                         break
                 col.add_task(t,parent=p)
@@ -171,7 +171,7 @@ def main():
                 t.input(tasks=col,name=tn,due=tomorrow,eligible=datetime.datetime.now(),estworktime=0.5,tags=[],priority=8,tasktype="todo",completed=0)
                 p=0
                 for it in col.tasks:
-                    if col.tasks[it].data["name"]=="From Smartphone":
+                    if col.tasks[it].data["name"]=="Staging":
                         p=it
                         break
                 col.add_task(t,parent=p)

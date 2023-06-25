@@ -45,13 +45,13 @@ class task:
         t=timeslot.timeslot(duration=estworktime)
         self.data["estworktime"]=[t.data]
         
-#        if tags is None:
-#            if not (tasks is None):
-#                alltags=tasks.get_all_tags()
-#            else:
-#                alltags=[]
-#            tags=inputs.input_tags("Tag",alltags=alltags)
-        self.data["tags"]=[]
+        if tags is None:
+            if not (tasks is None):
+                alltags=tasks.get_all_tags()
+            else:
+                alltags=[]
+            tags=inputs.input_tags("Tag",alltags=alltags)
+        self.data["tags"]=tags
 
         #if tasktype is None:
         #    tasktype=inputs.select_from_set("Type of task",["todo","wait"])
@@ -90,6 +90,10 @@ class task:
         with open(jsonpath, 'r') as f:
             self.data = json.load(f)
         self.ID=self.data["ID"]
+        #modify all tasks at once
+        #self.data["tags"]=[]
+        #with open(self.jsonpath, 'w') as json_file:
+        #    json.dump(self.data, json_file,default=util.serialize_datetime)
     
     def write_to_file(self):
         with open(self.jsonpath, 'w') as json_file:
@@ -138,6 +142,7 @@ class task:
             tused=self.get_used()
             left=ttot-tused
             actions.append("add to estimated work time of "+str(ttot)+" hours, left are "+str(left)+" hours")
+            actions.append("tags "+" ".join(self.data["tags"]))
             actions.append("back")
             
             result=inputs.select_from_set("Action",actions)
@@ -186,12 +191,29 @@ class task:
                             col.tasks[it].data["subtasks"].remove(self.ID)
                     #add to new
                     col.tasks[t].data["subtasks"].append(self.ID)
-
                 
             elif result==actions[6]:
                 estworktime=inputs.input_float("Add to estimated work time in hours")
                 t=timeslot.timeslot(duration=estworktime)
                 self.data["estworktime"].append(t.data)
+            elif result==actions[7]:
+                #tags
+                actions=[]
+                actions.append("add tag")
+                actions.append("remove tag")
+                actions.append("back")
+                result=inputs.select_from_set("Action",actions)
+                if result==actions[0]:
+                    #add tag
+                    tag=inputs.input_string("additional tag",emptyallowed=False)
+                    self.data["tags"].append(tag)
+                elif result==actions[1]:
+                    #remove tag
+                    actions=self.data["tags"]
+                    actions.append("back")
+                    result=inputs.select_from_set("remove tag",actions)
+                    if result!="back":
+                        self.data["tags"].remove(result)               
 
             elif result==actions[len(actions)-1]:
                 break
