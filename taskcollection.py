@@ -12,15 +12,26 @@ import math
 import pytz
 from dateutil import relativedelta
 import pickle
+import shutil
+import filelock
 
 class taskcollection:
     path=""
     tasks={}
     tree={}
-    def __init__(self,path):
+    lock=None
+    def __init__(self,path,lock=False):
         self.path=path
         self.events={}
+        if lock:
+            self.lock()
         self.read()
+
+    def lock(self):
+        print("acquiring lock for task collection")
+        self.lock=filelock.FileLock(self.path+"/lock",timeout=1000000000)
+        self.lock.acquire(timeout=1000000000)
+        print("locked task collection")
 
     def read(self):
         if os.path.exists(self.path):
@@ -36,10 +47,16 @@ class taskcollection:
             os.mkdir(self.path+"/tasks")
             self.tasks={}
     
-    def write(self):
-        for p in self.tasks:
-            #print("writing element "+str(p)+" to "+self.tasks[p].jsonpath)
-            self.tasks[p].write_to_file()
+    def write_and_unlock(self):
+        if self.lock is None:
+            raise RuntimeError("trying to write collection without a lock!")
+        else:
+            for p in self.tasks:
+                #print("writing element "+str(p)+" to "+self.tasks[p].jsonpath)
+                self.tasks[p].write_to_file()
+            self.make_note_structure()
+            self.lock.release()
+            self.lock=None
     
     def add_task(self,t,parent=None):
         if parent is None:
@@ -168,7 +185,7 @@ class taskcollection:
                     print("stopping task",t)
                     ts["end"]=datetime.datetime.now()
                     ts["endtype"]="start_of_other_task"
-        self.write()
+        self.write_and_unlock()
     
     def check_running(self):
         #check if a task is running
@@ -177,7 +194,7 @@ class taskcollection:
                 continue
             for ts in self.tasks[t].data["timeslots"]:
                 if ts["end"] is None:
-                    return self.tasks[t].data["name"]
+                    return self.getfullname(t)
         return None
 
     def import_caldav(self):
@@ -239,13 +256,13 @@ class taskcollection:
                 self.tasks[0].data["subtasks"].append(ID)
             self.tasks[ID]=copy.deepcopy(t)
             self.tasks[ID].jsonpath="data/tasks/"+str(ID)+".json"
-        self.write()
+        self.write_and_unlock()
    
     def load_calendar_events(self,days=60,forceupdate=False):
         told=False
         if os.path.isfile(self.path+"/events_cache.p"):
             self.events=pickle.load(open(self.path+"/events_cache.p", "rb"))
-            print("Cache date",self.events["state"])
+#            print("Cache date",self.events["state"])
             if datetime.datetime.now()-self.events["state"]>=datetime.timedelta(hours=2):
                 told=True
         else:
@@ -341,12 +358,31 @@ class taskcollection:
                 self.tasks[i].tmp["all_parents"].append(ip)
         #get tags from parent if no own tags
         for it in self.tasks:
-            if len(self.tasks[it].data["tags"])==0:
+            if len(self.tasks[it].data["tags"])==0 or self.tasks[it].data["tags"] is None:
                 self.tasks[it].tmp["tags"]=[]
                 for ip in self.tasks[it].tmp["all_parents"]:
                     for t in self.tasks[ip].data["tags"]:
                         if not (t in self.tasks[it].tmp["tags"]):
                             self.tasks[it].tmp["tags"].append(t)
+            else:
+                self.tasks[it].tmp["tags"]=copy.deepcopy(self.tasks[it].data["tags"])
+
+    def getfullname(self,it):
+        s=""
+        #build full path
+        it2=it
+        while(True):
+            if it2==0:
+                break
+            for ip in self.tasks:
+                if it2 in self.tasks[ip].data["subtasks"]:
+                    if ip==0:
+                        it2=0
+                        break
+                    it2=ip
+                    s=self.tasks[ip].data["name"]+" -> "+s
+                    break
+        return s+self.tasks[it].data["name"]
 
     def schedule_all(self,prioritycutoff=0,slotduration=15,futuredays=7*6):
         tags=self.get_all_tags()
@@ -388,14 +424,10 @@ class taskcollection:
         incompletetasks=[]
         for ip in self.tasks:
             if not(self.tasks[ip].tmp["due_implicit"] is None) and (len(self.tasks[ip].data["estworktime"])==0) and (len(self.tasks[ip].data["subtasks"])==0):
-                incompletetasks.append(ip)
+                incompletetasks.append(self.getfullname(ip))
 
         if len(incompletetasks)>0:
-            print("Tasks with explicit or implicit due date and no subtasks but no work time estimation:")
-            for ip in incompletetasks:
-                print(self.tasks[ip].data)
-                self.tasks[ip].modify_interactive()
-                self.write()
+            problems.append("Task(s) with explicit or implicit due date and no subtasks but no work time estimation: "+" ".join(incompletetasks))
         else:
             #prepone due dates of dependencies to due date of job
             changed=True
@@ -441,7 +473,7 @@ class taskcollection:
                 try:
                     act_slots=act_slots_all[tag]            
                 except:
-                    raise RuntimeError("tag "+t+" has no time slot in config")
+                    raise RuntimeError("tag "+tag+" has no time slot in config")
             
             #exclude
             for i in range(len(slots)):
@@ -490,12 +522,16 @@ class taskcollection:
                 #filter tasks
                 if not(tag is None):
                     found=False
-                    if tag in self.tasks[it].tmp["tags"]:
-                        found=True
-                    if not found:
-                        self.tasks[it].tmp["to_be_scheduled"]=False
-                        self.tasks[it].tmp["needed_slots"]=0
-                        continue
+                    try:
+                        if tag in self.tasks[it].tmp["tags"]:
+                            found=True
+                        if not found:
+                            self.tasks[it].tmp["to_be_scheduled"]=False
+                            self.tasks[it].tmp["needed_slots"]=0
+                            continue
+                    except:
+                        print(str(it)+" "+str(self.tasks[it].data)+" "+str(self.tasks[it].tmp))
+                        raise RuntimeError("fatal")
 
                 if datetime.datetime.fromisoformat(self.tasks[it].tmp["due_implicit"])>tend:
                     self.tasks[it].tmp["to_be_scheduled"]=False
@@ -519,10 +555,8 @@ class taskcollection:
                         ttot=ttot+ts["duration"]
                     tused=self.tasks[it].get_used()
                     if tused>ttot:
-                        problems.append("Task "+self.tasks[it].data["name"]+" has used more time ("+str(tused)+") than estimated ("+str(ttot)+")")
+                        problems.append("Used too much time: Task "+self.getfullname(it)+" has used more time ("+str(tused)+") than estimated ("+str(ttot)+")")
                         checkok=False
-
-
 #                    c=0.0
 #                    if not(self.tasks[it].data["completed"] is None):
 #                        c=float(self.tasks[it].data["completed"])
@@ -546,7 +580,7 @@ class taskcollection:
                             slots[s]["task"]=it
                             self.tasks[it].tmp["slots"].append(s)
                         else:
-                            print("slot",slots[s],"is already in use but task",it,self.tasks[it].data["name"],"requires this slot")
+                            problems.append("Slot required: slot"+str(slots[s])+"is already in use but task "+self.getfullname(it)+" requires this slot")
                             raise RuntimeError("Schedule impossible")
 
             #schedule overdue tasks first
@@ -554,7 +588,7 @@ class taskcollection:
             for it in overdue:
                 if not self.tasks[it].tmp["to_be_scheduled"]:
                     continue
-                print("First scheduling overdue task",it,self.tasks[it].data["name"],self.tasks[it].data["due"],self.tasks[it].tmp["due_implicit"])
+                #print("First scheduling overdue task",it,self.tasks[it].data["name"],self.tasks[it].data["due"],self.tasks[it].tmp["due_implicit"])
                 sc=0
                 for i in range(len(slots)):
                     if not slots[i]["used"]:
@@ -565,17 +599,17 @@ class taskcollection:
                         if sc==self.tasks[it].tmp["needed_slots"]:
                             break
                 if sc!=self.tasks[it].tmp["needed_slots"]:
-                    problems.append("Couldn't schedule overdue task"+self.tasks[it].data["name"]+" first")
+                    problems.append("Couldn't schedule overdue task: "+self.getfullname(it))
                     checkok=False
                 else:
                     self.tasks[it].tmp["to_be_scheduled"]=False
-                    problems.append("First scheduled overdue task "+self.tasks[it].data["name"]+" first")
+                    problems.append("First scheduled overdue task: "+self.getfullname(it))
             
             #check basic necessary conditions
             #check for solution for individual tasks
             for it in self.tasks:
                 if self.tasks[it].tmp["needed_slots"]> len(self.tasks[it].tmp["possible_slots"]) and self.tasks[it].tmp["to_be_scheduled"]:
-                    problems.append("There are not enough slots to schedule task "+str(it)+" "+self.tasks[it].data["name"]+" even individually: needed slots "+str(self.tasks[it].tmp["needed_slots"])+", possible slots "+str(len(self.tasks[it].tmp["possible_slots"])))
+                    problems.append("There are not enough slots to schedule task: "+str(it)+" "+self.getfullname(it)+" even individually: needed slots "+str(self.tasks[it].tmp["needed_slots"])+", possible slots "+str(len(self.tasks[it].tmp["possible_slots"])))
                     checkok=False
 
             #schedule: earliest deadline first
@@ -619,7 +653,7 @@ class taskcollection:
             #check schedule: check if all deadlines could be fulfilled
             for it in self.tasks:
                 if self.tasks[it].tmp["to_be_scheduled"]:
-                    problems.append("Task couldn't be scheduled: "+str(it)+" "+self.tasks[it].data["name"]+" due "+str(self.tasks[it].tmp["due_implicit"]))
+                    problems.append("Task couldn't be scheduled: "+str(it)+" "+self.getfullname(it)+" "+str(self.tasks[it].tmp["due_implicit"]))
                     checkok=False
             #compress slots
             slots_compressed=self.compress_slots(slots)
@@ -638,7 +672,7 @@ class taskcollection:
                     start=slots[i]["start"]
                     end=slots[i]["end"]
                 elif slots[i]["task"]!=prev:
-                    slots_compressed.append(str(start)+" - "+str(end)+" "+self.tasks[prev].data["name"]+" (due "+str(self.tasks[prev].data["due"])+ ", eff. due "+str(self.tasks[prev].tmp["due_implicit"])+") "+str(prev))
+                    slots_compressed.append(str(start)+" - "+str(end)+" "+self.getfullname(prev)+" (due "+str(self.tasks[prev].data["due"])+ ", eff. due "+str(self.tasks[prev].tmp["due_implicit"])+") "+str(prev))
                     prev=slots[i]["task"]
                     start=slots[i]["start"]
                     end=slots[i]["end"]
@@ -646,12 +680,12 @@ class taskcollection:
                     if end==slots[i]["start"]: 
                         end=slots[i]["end"]
                     else:
-                        slots_compressed.append(str(start)+" - "+str(end)+" "+self.tasks[prev].data["name"]+" (due "+str(self.tasks[prev].data["due"])+ ", eff. due "+str(self.tasks[prev].tmp["due_implicit"])+") "+str(prev))
+                        slots_compressed.append(str(start)+" - "+str(end)+" "+self.getfullname(prev)+" (due "+str(self.tasks[prev].data["due"])+ ", eff. due "+str(self.tasks[prev].tmp["due_implicit"])+") "+str(prev))
                         prev=slots[i]["task"]
                         start=slots[i]["start"]
                         end=slots[i]["end"]
 
-        slots_compressed.append(str(start)+" - "+str(end)+" "+self.tasks[prev].data["name"]+" (due "+str(self.tasks[prev].data["due"])+ ", eff. due "+str(self.tasks[prev].tmp["due_implicit"])+") "+str(prev))
+        slots_compressed.append(str(start)+" - "+str(end)+" "+self.getfullname(prev)+" (due "+str(self.tasks[prev].data["due"])+ ", eff. due "+str(self.tasks[prev].tmp["due_implicit"])+") "+str(prev))
         return slots_compressed
 
 
@@ -690,5 +724,29 @@ class taskcollection:
                 ret.add(p[level])
         return ret
 
+    def make_note_structure(self):
+        config = dotenv_values(".env")
+        root = config["notes_root"]
+#        print("note structure:",root)
+        self.buf=[]
+        self.buf2=[]
+        self.buf_paths=[]
+        self.tasks_to_list(element=0,level=0,path=[0],fields=["ID"],fields_tmp=None,completed=False)
+        for ip in range(len(self.buf_paths)):
+            pa=""
+            for it in self.buf_paths[ip][1:]:
+                pa=pa+"/"+util.pretty_filename(self.tasks[it].data["name"])
+            #print(self.buf_paths[ip],pa)
+            os.makedirs(root+"/"+pa,exist_ok=True)
 
-
+    def stats(self,days=7):
+        now=datetime.datetime.now()
+        tl=datetime.datetime(now.year, now.month,now.day,0,0)+relativedelta.relativedelta(days=-days)
+        self.used_time(start=tl,end=now)
+        l=self.get_items_at_level(level=1)
+        s="Worktime stats (last "+str(days)+" days):\n"
+        for i in l:
+            s=s+self.tasks[i].data["name"]+" "+"{:.2f}".format(self.tasks[i].tmp["used_time"])+"\n"
+        event_time=self.event_time(start=tl,end=now)
+        s=s+"calender event stats (last "+str(days)+" days): "+"{:.2f}".format(event_time)
+        return s

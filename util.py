@@ -5,6 +5,9 @@ import caldav
 import pytz
 import time
 import subprocess
+import html
+import re
+import hashlib
 
 def serialize_datetime(obj):
     if isinstance(obj, datetime.datetime):
@@ -123,3 +126,23 @@ def get_presence(hosts):
         if o.find("false")>=0:
             s.append([False,int(o.split()[0])])
     return s
+
+def pretty_filename(s):
+    return s.strip().replace(" ","_").replace("ä","ae").replace("ü","ue").replace("ö","oe").replace("ß","ss").replace("(","_").replace(")","_").replace("[","_").replace("]","_").replace("/","_").replace("\\","_").replace("%","_").replace("?","_").replace("=","_").replace(":","_").replace("-","_").replace("&","_").replace("|","_").replace(">","_").replace("<","_").replace("*","_").replace(";","_").replace("+","_").replace("@","_").replace("\"","_").replace("'","_")
+
+def tohtml(s):
+    duden = {"ä": "&auml;", "Ä": "&Auml;", "ö": "&ouml;", "Ö": "&Ouml;", "ü": "&uuml;", "Ü": "&Uuml;", "ß": "&szlig;"}
+#    for d in duden:
+#        s=s.replace(d,duden[d])
+    return html.escape(s)
+
+def hrefurls(s):
+    urls=re.findall('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', s)
+    for u in urls:
+        s=s.replace(u,"<a href=\""+u+"\" target=\"_blank\"  rel=\"noopener noreferrer\">"+u+"</a>")
+    return s
+def hashfile(filename):
+    with open(filename,"rb") as f:
+        bytes = f.read() # read entire file as bytes
+        readable_hash = hashlib.sha256(bytes).hexdigest();
+    return readable_hash

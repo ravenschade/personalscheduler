@@ -7,6 +7,7 @@ import taskcollection
 import datetime
 import pytz
 from dateutil import relativedelta
+import copy
 
 class task:
     jsonpath=""
@@ -50,8 +51,12 @@ class task:
                 alltags=tasks.get_all_tags()
             else:
                 alltags=[]
+            alltags.append("no tag")
             tags=inputs.input_tags("Tag",alltags=alltags)
-        self.data["tags"]=tags
+        if "no tag" in tags:
+            self.data["tags"]=[]
+        else:
+            self.data["tags"]=tags
 
         #if tasktype is None:
         #    tasktype=inputs.select_from_set("Type of task",["todo","wait"])
@@ -198,18 +203,16 @@ class task:
                 self.data["estworktime"].append(t.data)
             elif result==actions[7]:
                 #tags
-                actions=[]
-                actions.append("add tag")
-                actions.append("remove tag")
-                actions.append("back")
+                actions=["add tag","remove tag","back"]
                 result=inputs.select_from_set("Action",actions)
                 if result==actions[0]:
                     #add tag
                     tag=inputs.input_string("additional tag",emptyallowed=False)
-                    self.data["tags"].append(tag)
+                    if not tag in self.data["tags"]:
+                        self.data["tags"].append(tag)
                 elif result==actions[1]:
                     #remove tag
-                    actions=self.data["tags"]
+                    actions=copy.deepcopy(self.data["tags"])
                     actions.append("back")
                     result=inputs.select_from_set("remove tag",actions)
                     if result!="back":
@@ -217,5 +220,6 @@ class task:
 
             elif result==actions[len(actions)-1]:
                 break
+        self.write_to_file()
 
 
